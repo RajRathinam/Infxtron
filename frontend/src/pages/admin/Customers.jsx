@@ -1,52 +1,39 @@
 import React, { useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import { Search } from "lucide-react";
+import { customersAPI } from "../../utils/api";
+import Swal from "sweetalert2";
 
 const Customers = () => {
   const [customers, setCustomers] = useState([]);
   const [filtered, setFiltered] = useState([]);
   const [search, setSearch] = useState("");
   const [filterEmail, setFilterEmail] = useState(false);
+  const [loading, setLoading] = useState(true);
 
-  // Dummy data
+  // Fetch customers from backend
   useEffect(() => {
-    const dummyData = [
-      {
-        name: "John Doe",
-        phone: "9876543210",
-        email: "john.doe@example.com",
-        address: "123 Green Street, Chennai",
-        message: "Loved the salad bowl!",
-        wantsOffers: true,
-      },
-      {
-        name: "Priya Sharma",
-        phone: "9988776655",
-        email: "",
-        address: "22, Park View Road, Bangalore",
-        message: "Waiting for more vegan options.",
-        wantsOffers: false,
-      },
-      {
-        name: "Arun Kumar",
-        phone: "9123456789",
-        email: "arun.kumar@gmail.com",
-        address: "Flat 9, Lotus Apartments, Mumbai",
-        message: "Great service and packaging.",
-        wantsOffers: true,
-      },
-      {
-        name: "Sneha Patel",
-        phone: "9000011122",
-        email: "",
-        address: "45, River View Colony, Pune",
-        message: "",
-        wantsOffers: false,
-      },
-    ];
-    setCustomers(dummyData);
-    setFiltered(dummyData);
+    fetchCustomers();
   }, []);
+
+  const fetchCustomers = async () => {
+    try {
+      setLoading(true);
+      const res = await customersAPI.getAll();
+      setCustomers(res.data);
+      setFiltered(res.data);
+    } catch (error) {
+      console.error("Error fetching customers:", error);
+      Swal.fire({
+        title: "Error!",
+        text: "Failed to load customers. Please try again.",
+        icon: "error",
+        confirmButtonColor: "#6dce00",
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
 
   // Search + filter logic
   useEffect(() => {
@@ -99,47 +86,51 @@ const Customers = () => {
         transition={{ duration: 0.4 }}
         className="overflow-x-auto bg-white rounded shadow-md border border-gray-100"
       >
-        <table className="w-full text-left text-gray-700">
-          <thead className="bg-green-100 text-green-800 uppercase text-sm font-semibold">
-            <tr>
-              <th className="px-4 py-3">Name</th>
-              <th className="px-4 py-3">Phone</th>
-              <th className="px-4 py-3">Email</th>
-              <th className="px-4 py-3">Address</th>
-              <th className="px-4 py-3">Message</th>
-              <th className="px-4 py-3">Wants Offers</th>
-            </tr>
-          </thead>
-          <tbody>
-            {filtered.length > 0 ? (
-              filtered.map((c, index) => (
-                <tr
-                  key={index}
-                  className="border-b border-gray-300 text-xs hover:bg-green-50 transition"
-                >
-                  <td className="px-4 py-2 font-medium">{c.name}</td>
-                  <td className="px-4 py-2">{c.phone}</td>
-                  <td className="px-4 py-2">{c.email || "-"}</td>
-                  <td className="px-4 py-2">{c.address || "-"}</td>
-                  <td className="px-4 py-2">{c.message || "-"}</td>
-                  <td className="px-4 py-2">
-                    {c.wantsOffers ? (
-                      <span className="text-green-600 font-semibold">Yes</span>
-                    ) : (
-                      <span className="text-gray-400">No</span>
-                    )}
+        {loading ? (
+          <div className="p-8 text-center text-gray-500">Loading customers...</div>
+        ) : (
+          <table className="w-full text-left text-gray-700">
+            <thead className="bg-green-100 text-green-800 uppercase text-sm font-semibold">
+              <tr>
+                <th className="px-4 py-3">Name</th>
+                <th className="px-4 py-3">Phone</th>
+                <th className="px-4 py-3">Email</th>
+                <th className="px-4 py-3">Address</th>
+                <th className="px-4 py-3">Message</th>
+                <th className="px-4 py-3">Wants Offers</th>
+              </tr>
+            </thead>
+            <tbody>
+              {filtered.length > 0 ? (
+                filtered.map((c) => (
+                  <tr
+                    key={c.id}
+                    className="border-b border-gray-300 text-xs hover:bg-green-50 transition"
+                  >
+                    <td className="px-4 py-2 font-medium">{c.name}</td>
+                    <td className="px-4 py-2">{c.phone}</td>
+                    <td className="px-4 py-2">{c.email || "-"}</td>
+                    <td className="px-4 py-2">{c.address || "-"}</td>
+                    <td className="px-4 py-2">{c.message || "-"}</td>
+                    <td className="px-4 py-2">
+                      {c.wantsOffers ? (
+                        <span className="text-green-600 font-semibold">Yes</span>
+                      ) : (
+                        <span className="text-gray-400">No</span>
+                      )}
+                    </td>
+                  </tr>
+                ))
+              ) : (
+                <tr>
+                  <td colSpan="6" className="text-center py-6 text-gray-500">
+                    No customers found.
                   </td>
                 </tr>
-              ))
-            ) : (
-              <tr>
-                <td colSpan="6" className="text-center py-6 text-gray-500">
-                  No customers found.
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
+              )}
+            </tbody>
+          </table>
+        )}
       </motion.div>
     </div>
   );

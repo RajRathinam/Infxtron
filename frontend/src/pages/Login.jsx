@@ -1,18 +1,47 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { login } from "../utils/auth";
+import { adminAPI } from "../utils/api";
+import Swal from "sweetalert2";
 import { Lock, Mail, Eye, EyeOff } from "lucide-react";
 
 export default function Login() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
+  const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    login("demo-token"); // mock token
-    navigate("/admin");
+    setLoading(true);
+
+    try {
+      const res = await adminAPI.login(email, password);
+      
+      if (res.status === 200) {
+        localStorage.setItem("adminEmail", email);
+        login(true);
+        
+        Swal.fire({
+          title: "Success!",
+          text: "Login successful!",
+          icon: "success",
+          confirmButtonColor: "#6dce00",
+        });
+        
+        navigate("/admin");
+      }
+    } catch (error) {
+      Swal.fire({
+        title: "Login Failed!",
+        text: error.response?.data?.message || "Invalid credentials. Please try again.",
+        icon: "error",
+        confirmButtonColor: "#6dce00",
+      });
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -103,9 +132,12 @@ export default function Login() {
           {/* Submit Button */}
           <button
             type="submit"
-            className="w-full bg-[#6dce00] text-white py-2 rounded-md hover:bg-[#60b800] transition font-medium"
+            disabled={loading}
+            className={`w-full bg-[#6dce00] text-white py-2 rounded-md hover:bg-[#60b800] transition font-medium ${
+              loading ? "opacity-70 cursor-not-allowed" : ""
+            }`}
           >
-            Login
+            {loading ? "Logging in..." : "Login"}
           </button>
 
           {/* Small Footer Note */}

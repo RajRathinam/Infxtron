@@ -136,8 +136,6 @@ export const placeOrder = async (req, res) => {
   }
 };
 
-
-
 // Get all orders
 export const getOrders = async (req, res) => {
   try {
@@ -154,8 +152,8 @@ export const updateOrderStatus = async (req, res) => {
   const { id } = req.params;
   const { status } = req.body;
 
-  // Only allow 3 valid statuses
-  const validStatuses = ["order taken", "order shipped", "order delivered"];
+  // Only allow valid statuses
+  const validStatuses = ["pending", "order taken", "order shipped", "order delivered"];
 
   if (!validStatuses.includes(status)) {
     return res.status(400).json({

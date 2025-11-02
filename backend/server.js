@@ -2,14 +2,20 @@ import express from "express";
 import cors from "cors";
 import dotenv from "dotenv";
 import session from "express-session";
+import path from "path";
+import { fileURLToPath } from "url";
 import sequelize from "./config/database.js";
 
 import adminRoutes from "./routes/adminRoutes.js";
 import productRoutes from "./routes/productRoutes.js";
 import orderRoutes from "./routes/orderRoutes.js";
+import customerRoutes from "./routes/customerRoutes.js";
 import { seedAdmin } from "./seeders/adminSeeder.js";
 
 dotenv.config();
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -22,6 +28,9 @@ app.use(
 );
 
 app.use(express.json());
+
+// Serve static files (product images)
+app.use("/uploads", express.static(path.join(__dirname, "uploads")));
 
 app.use(
   session({
@@ -38,6 +47,7 @@ app.get("/", (req, res) => res.send("✅ Server is running with PostgreSQL + Seq
 app.use("/api/admin", adminRoutes);
 app.use("/api/products", productRoutes);
 app.use("/api/orders", orderRoutes);
+app.use("/api/customers", customerRoutes);
 
 sequelize
   .authenticate()

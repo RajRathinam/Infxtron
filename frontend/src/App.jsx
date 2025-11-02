@@ -12,9 +12,12 @@ import Product from "./pages/admin/Products";
 import Customers from "./pages/admin/Customers";
 import Orders from "./pages/admin/Orders";
 import ProtectedRoute from "./components/ProtectedRoute";
+import Preloader from "./components/Preloader";
 
 function App() {
   return (
+    <>
+      <Preloader />
     <Router>
       <Routes>
         {/* Ecommerce */}
@@ -45,6 +48,7 @@ function App() {
         </Route>
       </Routes>
     </Router>
+    </>
   );
 }
 

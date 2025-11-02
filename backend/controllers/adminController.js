@@ -9,7 +9,7 @@ export const adminLogin = async (req, res) => {
     const admin = await Admin.findOne({ where: { email } });
     if (!admin) return res.status(404).json({ message: "Admin not found" });
 
-    const isMatch = await bcrypt.compare(password, "$2b$10$KjhWO5Nj5./FpL1DYe4fI.b6P9Q/spHsfRZSv16cDc/vgb5UaacJ.");
+    const isMatch = await bcrypt.compare(password, admin.password);
     if (!isMatch) return res.status(401).json({ message: "Invalid credentials" });
 
     // Store session

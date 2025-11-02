@@ -15,6 +15,17 @@ const Order = sequelize.define("Order", {
     type: DataTypes.TEXT,
     allowNull: false,
   },
+  status: {
+    type: DataTypes.STRING,
+    defaultValue: "pending",
+    allowNull: false,
+    validate: {
+      isIn: {
+        args: [["pending", "order taken", "order shipped", "order delivered"]],
+        msg: "Invalid order status",
+      },
+    },
+  },
 });
 
 // Relationship: One Customer can have many Orders

@@ -1,7 +1,9 @@
 import { useState } from "react";
 import { Outlet, NavLink, useNavigate } from "react-router-dom";
 import { logout } from "../../utils/auth";
-import { Menu, X, LogOut, KeyRound, User } from "lucide-react";
+import { adminAPI } from "../../utils/api";
+import Swal from "sweetalert2";
+import { Menu, X, LogOut, KeyRound, User, Eye, EyeOff } from "lucide-react";
 
 export default function AdminLayout() {
   const navigate = useNavigate();
@@ -13,8 +15,12 @@ export default function AdminLayout() {
     newPassword: "",
     confirmPassword: "",
   });
+  const [showPasswords, setShowPasswords] = useState({
+    oldPassword: false,
+    newPassword: false,
+    confirmPassword: false,
+  });
   const [loading, setLoading] = useState(false);
-  const [message, setMessage] = useState("");
 
   const handleLogout = () => {
     logout();
@@ -27,30 +33,67 @@ export default function AdminLayout() {
 
   const handleChangePassword = async (e) => {
     e.preventDefault();
-    setLoading(true);
-    setMessage("");
-
-    try {
-      const res = await fetch("/api/admin/change-password", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify(form),
+    
+    // Validation
+    if (!form.oldPassword || !form.newPassword || !form.confirmPassword) {
+      Swal.fire({
+        title: "Missing Fields!",
+        text: "Please fill in all password fields.",
+        icon: "warning",
+        confirmButtonColor: "#6dce00",
       });
-
-      const data = await res.json();
-      if (res.ok) {
-        setMessage("✅ Password changed successfully!");
-        setForm({ oldPassword: "", newPassword: "", confirmPassword: "" });
-        setTimeout(() => setShowPasswordModal(false), 1500);
-      } else {
-        setMessage(`❌ ${data.message}`);
-      }
-    } catch (err) {
-      setMessage("❌ Server error, try again later.");
+      return;
     }
 
-    setLoading(false);
+    if (form.newPassword !== form.confirmPassword) {
+      Swal.fire({
+        title: "Password Mismatch!",
+        text: "New password and confirm password do not match.",
+        icon: "error",
+        confirmButtonColor: "#6dce00",
+      });
+      return;
+    }
+
+    setLoading(true);
+
+    try {
+      await adminAPI.changePassword(
+        form.oldPassword,
+        form.newPassword,
+        form.confirmPassword
+      );
+      
+      Swal.fire({
+        title: "Success!",
+        text: "Password changed successfully!",
+        icon: "success",
+        confirmButtonColor: "#6dce00",
+      });
+      
+      setForm({ oldPassword: "", newPassword: "", confirmPassword: "" });
+      setShowPasswordModal(false);
+    } catch (error) {
+      Swal.fire({
+        title: "Error!",
+        text: error.response?.data?.message || "Failed to change password. Please try again.",
+        icon: "error",
+        confirmButtonColor: "#6dce00",
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleLogoutClick = async () => {
+    try {
+      await adminAPI.logout();
+    } catch (error) {
+      console.error("Logout error:", error);
+    } finally {
+      logout();
+      navigate("/login");
+    }
   };
 
   const activeClass =
@@ -133,7 +176,7 @@ export default function AdminLayout() {
                 <button
                   onClick={() => {
                     setDropdownOpen(false);
-                    handleLogout();
+                    handleLogoutClick();
                   }}
                   className="w-full flex items-center gap-2 px-4 py-2 text-sm text-red-600 hover:bg-red-50 transition"
                 >
@@ -247,7 +290,7 @@ export default function AdminLayout() {
           <button
             onClick={() => {
               setMenuOpen(false);
-              handleLogout();
+              handleLogoutClick();
             }}
             className="w-full bg-[#6dce00] hover:bg-[#60b800] text-white py-2 rounded-md font-medium transition flex items-center justify-center gap-2"
           >
@@ -272,45 +315,65 @@ export default function AdminLayout() {
             </h2>
 
             <form onSubmit={handleChangePassword} className="space-y-4">
-              <input
-                type="password"
-                name="oldPassword"
-                placeholder="Old Password"
-                value={form.oldPassword}
-                onChange={handleInputChange}
-                className="w-full border border-gray-300 rounded-md px-3 py-2 mt-1 focus:outline-none focus:ring-2 focus:ring-[#6dce00]"
-                required
-              />
-              <input
-                type="password"
-                name="newPassword"
-                placeholder="New Password"
-                value={form.newPassword}
-                onChange={handleInputChange}
-                className="w-full border border-gray-300 rounded-md px-3 py-2 mt-1 focus:outline-none focus:ring-2 focus:ring-[#6dce00]"
-                required
-              />
-              <input
-                type="password"
-                name="confirmPassword"
-                placeholder="Confirm New Password"
-                value={form.confirmPassword}
-                onChange={handleInputChange}
-                className="w-full border border-gray-300 rounded-md px-3 py-2 mt-1 focus:outline-none focus:ring-2 focus:ring-[#6dce00]"
-                required
-              />
-
-              {message && (
-                <p
-                  className={`text-sm text-center ${
-                    message.startsWith("✅")
-                      ? "text-green-600"
-                      : "text-red-600"
-                  }`}
+              {/* Old Password */}
+              <div className="relative">
+                <input
+                  type={showPasswords.oldPassword ? "text" : "password"}
+                  name="oldPassword"
+                  placeholder="Old Password"
+                  value={form.oldPassword}
+                  onChange={handleInputChange}
+                  className="w-full border border-gray-300 rounded-md px-3 py-2 pr-10 mt-1 focus:outline-none focus:ring-2 focus:ring-[#6dce00]"
+                  required
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPasswords({ ...showPasswords, oldPassword: !showPasswords.oldPassword })}
+                  className="absolute right-3 top-[50%] transform -translate-y-[50%] text-gray-500 hover:text-gray-700 mt-1"
                 >
-                  {message}
-                </p>
-              )}
+                  {showPasswords.oldPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                </button>
+              </div>
+
+              {/* New Password */}
+              <div className="relative">
+                <input
+                  type={showPasswords.newPassword ? "text" : "password"}
+                  name="newPassword"
+                  placeholder="New Password"
+                  value={form.newPassword}
+                  onChange={handleInputChange}
+                  className="w-full border border-gray-300 rounded-md px-3 py-2 pr-10 mt-1 focus:outline-none focus:ring-2 focus:ring-[#6dce00]"
+                  required
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPasswords({ ...showPasswords, newPassword: !showPasswords.newPassword })}
+                  className="absolute right-3 top-[50%] transform -translate-y-[50%] text-gray-500 hover:text-gray-700 mt-1"
+                >
+                  {showPasswords.newPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                </button>
+              </div>
+
+              {/* Confirm Password */}
+              <div className="relative">
+                <input
+                  type={showPasswords.confirmPassword ? "text" : "password"}
+                  name="confirmPassword"
+                  placeholder="Confirm New Password"
+                  value={form.confirmPassword}
+                  onChange={handleInputChange}
+                  className="w-full border border-gray-300 rounded-md px-3 py-2 pr-10 mt-1 focus:outline-none focus:ring-2 focus:ring-[#6dce00]"
+                  required
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPasswords({ ...showPasswords, confirmPassword: !showPasswords.confirmPassword })}
+                  className="absolute right-3 top-[50%] transform -translate-y-[50%] text-gray-500 hover:text-gray-700 mt-1"
+                >
+                  {showPasswords.confirmPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                </button>
+              </div>
 
               <button
                 type="submit"
