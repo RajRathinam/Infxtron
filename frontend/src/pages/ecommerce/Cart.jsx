@@ -47,7 +47,7 @@ export default function Cart() {
             animate={{ opacity: 1, y: 0 }}
             className="text-gray-600 text-md text-center py-16"
           >
-            Your cart is empty 😢 <br />
+            Your cart is empty <br />
             <span className="text-orange-500 font-semibold">
               Add something healthy to your basket!
             </span>

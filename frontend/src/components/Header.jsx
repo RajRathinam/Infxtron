@@ -16,12 +16,14 @@ const Header = () => {
     };
 
     updateCartCount();
-    window.addEventListener("storage", updateCartCount);
 
-    return () => window.removeEventListener("storage", updateCartCount);
+    // ✅ Listen for custom "cartUpdated" event
+    window.addEventListener("cartUpdated", updateCartCount);
+
+    return () => window.removeEventListener("cartUpdated", updateCartCount);
   }, []);
 
-  // Smooth scroll navigation
+  // Smooth scroll navigation for sections
   const handleScroll = (id) => {
     if (location.pathname !== "/") {
       navigate("/");
@@ -33,10 +35,18 @@ const Header = () => {
     }
   };
 
+  // ✅ Navigate to cart and scroll to top
+  const handleCartClick = () => {
+    navigate("/cart");
+    setTimeout(() => {
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    }, 100);
+  };
+
   // Scroll spy effect
   useEffect(() => {
     const handleScrollSpy = () => {
-      const sections = ["home", "about", "products", "contact"];
+      const sections = ["home", "about", "products", "contact", "cart"];
       let current = "home";
       for (const id of sections) {
         const el = document.getElementById(id);
@@ -94,11 +104,10 @@ const Header = () => {
 
         {/* Right: Cart + Login (Desktop) */}
         <div className="hidden md:flex items-center gap-4 z-10">
-          {/* Cart */}
           <div className="relative">
             <button
               className="text-gray-600 hover:text-black transition-colors"
-              onClick={() => navigate("/cart")}
+              onClick={handleCartClick} // ✅ Updated here
             >
               <ShoppingCart size={22} />
             </button>
@@ -109,7 +118,6 @@ const Header = () => {
             )}
           </div>
 
-          {/* Login */}
           <button
             onClick={() => navigate("/login")}
             className="flex items-center gap-1 bg-gray-100 hover:bg-gray-200 text-gray-700 px-3 py-2 rounded-md momo-sans text-sm transition-colors"
@@ -121,10 +129,9 @@ const Header = () => {
 
         {/* ✅ Mobile Icons */}
         <div className="md:hidden flex items-center justify-between w-16 z-10">
-          {/* Cart */}
           <div className="relative flex justify-center items-center">
             <button
-              onClick={() => navigate("/cart")}
+              onClick={handleCartClick} // ✅ Updated here too
               className="text-gray-700 hover:text-black transition-colors"
             >
               <ShoppingCart size={22} />
@@ -136,7 +143,6 @@ const Header = () => {
             )}
           </div>
 
-          {/* User */}
           <button
             onClick={() => navigate("/login")}
             className="text-gray-700 hover:text-black transition-colors flex justify-center items-center"

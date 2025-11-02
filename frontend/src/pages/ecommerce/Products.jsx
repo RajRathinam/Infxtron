@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import { motion } from "framer-motion";
+import Swal from "sweetalert2";
 import {
   ShoppingBasket,
   Dumbbell,
@@ -41,7 +42,24 @@ const Products = () => {
     }
 
     sessionStorage.setItem("cartItems", JSON.stringify(existing));
-    alert(`${product.productName} added to cart!`);
+
+    // ✅ Update header cart count
+    window.dispatchEvent(new Event("cartUpdated"));
+
+    // 🎉 Sweet Alert Popup
+    Swal.fire({
+      title: "Added to Cart!",
+      text: `${product.productName} (x${qty}) has been added to your cart.`,
+      icon: "success",
+      confirmButtonColor: "#6dce00",
+      confirmButtonText: "OK",
+      showClass: {
+        popup: "animate__animated animate__fadeInDown",
+      },
+      hideClass: {
+        popup: "animate__animated animate__fadeOutUp",
+      },
+    });
   };
 
   const products = [
