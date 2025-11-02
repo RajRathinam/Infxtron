@@ -20,3 +20,25 @@ const sequelize = new Sequelize(
 );
 
 export default sequelize;
+
+
+
+DB_HOST=localhost
+DB_USER=postgres
+DB_PASSWORD=12348765
+DB_NAME=Test
+DB_PORT=5432
+
+DATABASE_URL=
+
+PORT=5000
+SESSION_SECRET=your_strong_secret_key_here
+
+ADMIN_EMAIL=admin@example.com
+ADMIN_PASSWORD=admin123
+
+SMTP_HOST=smtp.gmail.com
+SMTP_PORT=587
+SMTP_USER=restart18112024@gmail.com
+SMTP_PASS=<new_app_password_from_google>
+OWNER_EMAIL=rajrathinam2005@gmail.com
