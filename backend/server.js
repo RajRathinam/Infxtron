@@ -19,7 +19,7 @@ const PORT = process.env.PORT || 5000;
 
 app.use(
   cors({
-    origin: "http://localhost:5173", // change to 5173 if using Vite
+    origin: "https://ags-ilws.onrender.com", // change to 5173 if using Vite
     credentials: true,
   })
 );
@@ -51,7 +51,7 @@ sequelize
   .catch((err) => console.error("❌ Database connection failed:", err));
 
 sequelize
-  .sync({ alter: true })
+  .sync({ force: true })
   .then(async () => {
     console.log("✅ Tables synced successfully");
     await seedAdmin(process.env.ADMIN_EMAIL, process.env.ADMIN_PASSWORD);
