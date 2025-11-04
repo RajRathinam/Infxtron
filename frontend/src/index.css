@@ -4,18 +4,6 @@
 /* 💎 Font Classes */
 @import "tailwindcss";
 
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
-
-/* Optional custom styles */
-@layer base {
-  html {
-    scroll-behavior: smooth;
-  }
-}
-
-
 html {
   scroll-behavior: smooth;
 }

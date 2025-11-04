@@ -1,63 +1,38 @@
 import Customer from "../models/Customer.js";
 
-// Submit contact form (store in customer table)
-export const submitContact = async (req, res) => {
-  const { name, phone, email, message, wantsOffers } = req.body;
-
-  if (!name || !phone) {
-    return res.status(400).json({ message: "Name and phone are required" });
-  }
-
-  if (!/^\d{10}$/.test(phone)) {
-    return res.status(400).json({ message: "Phone number must be exactly 10 digits" });
-  }
-
-  if (wantsOffers && !email) {
-    return res.status(400).json({ message: "Email is required if customer wants offers" });
-  }
-
+export const getCustomers = async (req, res) => {
   try {
-    // Check if customer exists by phone
-    let customer = await Customer.findOne({ where: { phone } });
+    const customers = await Customer.findAll();
+    res.json(customers);
+  } catch (e) {
+    res.status(500).json({ message: "Failed to fetch customers", error: e.message });
+  }
+};
 
-    if (customer) {
-      // Update existing customer
-      customer.name = name;
-      customer.email = email || customer.email;
-      customer.message = message || customer.message;
-      customer.wantsOffers = wantsOffers || false;
-      if (req.body.address) customer.address = req.body.address;
-      await customer.save();
-    } else {
-      // Create new customer
-      customer = await Customer.create({
-        name,
-        phone,
-        email: wantsOffers ? email : null,
-        message: message || null,
-        wantsOffers: wantsOffers || false,
-      });
+export const createCustomer = async (req, res) => {
+  try {
+    console.log("Received body:", req.body);
+
+    const { name, phone, email, message, wantsOffers } = req.body;
+
+    if (wantsOffers && !email) {
+      return res.status(400).json({ message: "Email is required when opting in for offers." });
     }
 
-    res.status(201).json({
-      message: "Contact form submitted successfully",
-      customer,
+    const newCustomer = await Customer.create({
+      name,
+      phone,
+      email: wantsOffers ? email : null,
+      message,
+      wantsOffers,
     });
-  } catch (err) {
-    res.status(500).json({ message: "Failed to submit contact form", error: err.message });
+
+    res.status(201).json({ message: "Customer created successfully", customer: newCustomer });
+  } catch (e) {
+    console.error("Create customer error:", e);
+    res.status(500).json({
+      message: "Failed to create customer",
+      error: e.message,
+    });
   }
 };
-
-// Get all customers
-export const getAllCustomers = async (req, res) => {
-  try {
-    const customers = await Customer.findAll({
-      order: [["createdAt", "DESC"]],
-    });
-    res.status(200).json(customers);
-  } catch (err) {
-    res.status(500).json({ message: "Failed to fetch customers", error: err.message });
-  }
-};
-
-

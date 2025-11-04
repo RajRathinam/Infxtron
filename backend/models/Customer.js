@@ -8,7 +8,6 @@ const Customer = sequelize.define("Customer", {
   },
   phone: {
     type: DataTypes.STRING,
-    unique: true,
     allowNull: false,
     validate: {
       isTenDigits(value) {

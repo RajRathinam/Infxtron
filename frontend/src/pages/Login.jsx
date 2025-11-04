@@ -1,44 +1,43 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { login } from "../utils/auth";
-import { adminAPI } from "../utils/api";
-import Swal from "sweetalert2";
+import axios from "axios";
+import { login as setToken } from "../utils/auth";
 import { Lock, Mail, Eye, EyeOff } from "lucide-react";
 
 export default function Login() {
+
+  const BASE_URL = import.meta.env.VITE_API_BASE_URL;
+
+
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [errorMsg, setErrorMsg] = useState("");
   const navigate = useNavigate();
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    setErrorMsg("");
     setLoading(true);
 
     try {
-      const res = await adminAPI.login(email, password);
-      
+      const res = await axios.post(
+        `${BASE_URL}/api/admin/login`,
+        { email, password },
+        { withCredentials: true }
+      );
+
       if (res.status === 200) {
+        // Session cookie is set by backend; store a lightweight token for client routing
+        setToken("session");
         localStorage.setItem("adminEmail", email);
-        login(true);
-        
-        Swal.fire({
-          title: "Success!",
-          text: "Login successful!",
-          icon: "success",
-          confirmButtonColor: "#6dce00",
-        });
-        
         navigate("/admin");
       }
     } catch (error) {
-      Swal.fire({
-        title: "Login Failed!",
-        text: error.response?.data?.message || "Invalid credentials. Please try again.",
-        icon: "error",
-        confirmButtonColor: "#6dce00",
-      });
+      setErrorMsg(
+        error.response?.data?.message || "Invalid credentials. Please try again."
+      );
     } finally {
       setLoading(false);
     }
@@ -63,25 +62,26 @@ export default function Login() {
             Welcome Back, Admin 🌱
           </h1>
           <p className="text-gray-500 mt-2 text-sm">
-            Manage your products, track customer inquiries, and keep AG’s
-            Healthy Food running fresh and smooth.
+            Manage your products, track orders, and keep AG’s Healthy Food
+            running smooth and fresh.
           </p>
         </div>
       </div>
 
       {/* Right Form Section */}
-      <div className="flex-1 flex items-center justify-center  bg-gradient-to-b from-green-50 to-white  relative">
-        {/* Decorative leaf shape */}
+      <div className="flex-1 flex items-center justify-center bg-gradient-to-b from-green-50 to-white relative">
+        {/* Decorative leaf images */}
         <img
           src="/assets/12.png"
           alt="Leaf decor"
-          className="absolute top-0 right-10 w-[800px]  rotate-12 pointer-events-none"
+          className="absolute top-0 right-10 w-[800px] rotate-12 pointer-events-none"
         />
- <img
+        <img
           src="/assets/11.png"
           alt="Leaf decor"
           className="absolute bottom-10 left-15 w-[300px] opacity-60 rotate-12 pointer-events-none"
         />
+
         <form
           onSubmit={handleSubmit}
           className="bg-white shadow-lg border border-gray-100 rounded-2xl px-8 py-10 w-[90%] max-w-sm z-10"
@@ -107,7 +107,7 @@ export default function Login() {
           </div>
 
           {/* Password Input with Eye Toggle */}
-          <div className="mb-6">
+          <div className="mb-4">
             <label className="text-gray-600 text-sm mb-1 block">Password</label>
             <div className="flex items-center border border-gray-300 rounded-md px-3 py-2 focus-within:ring-2 focus-within:ring-[#6dce00]/50 transition relative">
               <Lock size={18} className="text-gray-400 mr-2" />
@@ -129,12 +129,19 @@ export default function Login() {
             </div>
           </div>
 
+          {/* Error Message */}
+          {errorMsg && (
+            <p className="text-red-500 text-sm text-center mb-3">{errorMsg}</p>
+          )}
+
           {/* Submit Button */}
           <button
             type="submit"
             disabled={loading}
-            className={`w-full bg-[#6dce00] text-white py-2 rounded-md hover:bg-[#60b800] transition font-medium ${
-              loading ? "opacity-70 cursor-not-allowed" : ""
+            className={`w-full bg-[#6dce00] text-white py-2 rounded-md transition font-medium ${
+              loading
+                ? "opacity-70 cursor-not-allowed"
+                : "hover:bg-[#60b800]"
             }`}
           >
             {loading ? "Logging in..." : "Login"}

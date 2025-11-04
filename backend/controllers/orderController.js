@@ -3,8 +3,9 @@ import Order from "../models/Order.js";
 import { sendEmail } from "../utils/sendEmail.js";
 
 export const placeOrder = async (req, res) => {
-  const { name, phone, email, address, wantsOffers, products, totalPrice } = req.body;
+  const { name, phone, email, address, wantsOffers, products, totalPrice, transactionId } = req.body;
 
+  // Basic validation
   if (!name || !phone || !products || !totalPrice || !address) {
     return res.status(400).json({ message: "All required fields must be filled" });
   }
@@ -18,19 +19,19 @@ export const placeOrder = async (req, res) => {
   }
 
   try {
-    let customer = await Customer.findOne({ where: { phone } });
+    // Always create a new customer, ignoring if phone exists
+    const customer = await Customer.create({ name, phone, email, address, wantsOffers });
 
-    if (!customer) {
-      customer = await Customer.create({ name, phone, email, address, wantsOffers });
-    }
-
+    // Create the order
     const order = await Order.create({
       customerId: customer.id,
       products,
       totalPrice,
       deliveryAddress: address,
+      transactionId: transactionId || null,
     });
-    // Format products for email
+
+    // Format products for messages
     const formattedProducts = Array.isArray(products)
       ? products.map(p => `• ${p.productName} (${p.quantity || 1})`).join("<br/>")
       : products;
@@ -47,7 +48,6 @@ export const placeOrder = async (req, res) => {
       `We are preparing your order and it will be ready for delivery soon. Thank you for choosing AG's Healthy Food!`
     );
 
-    // WhatsApp message for Ready-to-Deliver
     const readyMessage = encodeURIComponent(
       `Hello ${name},\n\n` +
       `We are ready to deliver your order from AG's Healthy Food!\n\n` +
@@ -60,14 +60,13 @@ export const placeOrder = async (req, res) => {
       `Thank you for choosing AG's Healthy Food!`
     );
 
+    // Email HTML content
     const htmlContent = `
 <div style="font-family: Arial, sans-serif; max-width: 600px; margin: auto; border: 1px solid #e0e0e0; border-radius: 8px; overflow: hidden;">
-  <!-- Logo -->
   <div style="background-color: #f8f8f8; text-align: center; padding: 20px;">
     <img src="https://res.cloudinary.com/dximf5jvs/image/upload/v1761991343/uuqo1afuwr8cfkoes4hw.png" alt="AG's Healthy Food" style="width: 150px;" />
   </div>
 
-  <!-- Content -->
   <div style="padding: 20px; background-color: #ffffff;">
     <h2 style="color: #b94d06ff;">New Order Placed!</h2>
     <p style="font-size: 16px; color: #333333;">You have received a new order from your customer. Details are below:</p>
@@ -101,40 +100,45 @@ export const placeOrder = async (req, res) => {
       </tr>
     </table>
 
-    <!-- Buttons -->
     <div style="text-align: center; display: flex; flex-direction: column; gap: 10px; margin-top: 30px;">
-      <!-- Confirm Order Button -->
       <a href="https://wa.me/${phone}?text=${confirmMessage}" target="_blank"
          style="background-color: #FF9800; color: white; padding: 12px 24px; border-radius: 6px; text-decoration: none; font-weight: bold;">
         Take Order
       </a>
-
-      <!-- Ready-to-Deliver WhatsApp Button -->
       <a href="https://wa.me/${phone}?text=${readyMessage}" target="_blank"
          style="background-color: #25D366; color: white; padding: 12px 24px; border-radius: 6px; text-decoration: none; font-weight: bold;">
         Ready To Deliver
       </a>
     </div>
 
-<p style="margin-top: 30px; font-size: 14px; color: #777777;">
+    <p style="margin-top: 30px; font-size: 14px; color: #777777;">
       This is an automated notification from <strong>AG's Healthy Food</strong>.
     </p>
   </div>
 </div>
 `;
 
+    const adminOrdersUrl = process.env.ADMIN_ORDER_URL || "http://localhost:5173/admin/orders";
+    const htmlWithLink = htmlContent.replace(
+      "</div>\n</div>",
+      `  <div style="text-align:center; margin:20px 0;">
+      <a href="${adminOrdersUrl}" target="_blank" style="background:#0b5ed7;color:#fff;padding:10px 16px;border-radius:6px;text-decoration:none;font-weight:bold;">View Order in Admin</a>
+    </div>\n</div>\n</div>`
+    );
+
     await sendEmail({
       to: process.env.OWNER_EMAIL,
       subject: "New Order Received",
-      html: htmlContent,
+      html: htmlWithLink,
     });
-
 
     res.status(201).json({ message: "Order placed successfully", order });
   } catch (err) {
     res.status(500).json({ message: "Failed to place order", error: err.message });
   }
 };
+
+
 
 // Get all orders
 export const getOrders = async (req, res) => {
@@ -152,8 +156,8 @@ export const updateOrderStatus = async (req, res) => {
   const { id } = req.params;
   const { status } = req.body;
 
-  // Only allow valid statuses
-  const validStatuses = ["pending", "order taken", "order shipped", "order delivered"];
+  // Only allow 3 valid statuses
+  const validStatuses = ["order taken", "order shipped", "order delivered"];
 
   if (!validStatuses.includes(status)) {
     return res.status(400).json({

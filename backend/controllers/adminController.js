@@ -1,6 +1,7 @@
 import Admin from "../models/Admin.js";
 import bcrypt from "bcrypt";
 
+
 // Login admin and store session
 export const adminLogin = async (req, res) => {
   const { email, password } = req.body;

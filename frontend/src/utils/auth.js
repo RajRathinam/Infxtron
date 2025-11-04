@@ -1,20 +1,9 @@
-// Session-based authentication check
-export const isAuthenticated = () => !!localStorage.getItem("adminEmail");
+export const isAuthenticated = () => !!localStorage.getItem("token");
 
-export const login = (isAuth) => {
-  if (isAuth) {
-    localStorage.setItem("isAuthenticated", "true");
-  }
+export const login = (token) => {
+  localStorage.setItem("token", token);
 };
 
-export const logout = async () => {
-  try {
-    const { adminAPI } = await import("./api");
-    await adminAPI.logout();
-  } catch (error) {
-    console.error("Logout error:", error);
-  } finally {
-    localStorage.removeItem("adminEmail");
-    localStorage.removeItem("isAuthenticated");
-  }
+export const logout = () => {
+  localStorage.removeItem("token");
 };

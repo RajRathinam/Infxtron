@@ -2,35 +2,29 @@ import express from "express";
 import cors from "cors";
 import dotenv from "dotenv";
 import session from "express-session";
-import path from "path";
-import { fileURLToPath } from "url";
 import sequelize from "./config/database.js";
 
 import adminRoutes from "./routes/adminRoutes.js";
 import productRoutes from "./routes/productRoutes.js";
 import orderRoutes from "./routes/orderRoutes.js";
 import customerRoutes from "./routes/customerRoutes.js";
+import offerRoutes from "./routes/offerRoutes.js";
+import paymentRoutes from "./routes/paymentRoutes.js";
 import { seedAdmin } from "./seeders/adminSeeder.js";
 
 dotenv.config();
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
 
 const app = express();
 const PORT = process.env.PORT || 5000;
 
 app.use(
   cors({
-    origin: "https://ags-ilws.onrender.com", // change to 5173 if using Vite
+    origin: "http://localhost:5173", // change to 5173 if using Vite
     credentials: true,
   })
 );
 
 app.use(express.json());
-
-// Serve static files (product images)
-app.use("/uploads", express.static(path.join(__dirname, "uploads")));
 
 app.use(
   session({
@@ -48,6 +42,8 @@ app.use("/api/admin", adminRoutes);
 app.use("/api/products", productRoutes);
 app.use("/api/orders", orderRoutes);
 app.use("/api/customers", customerRoutes);
+app.use("/api/offers", offerRoutes);
+app.use("/api/payments", paymentRoutes);
 
 sequelize
   .authenticate()

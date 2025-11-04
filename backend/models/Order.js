@@ -16,15 +16,13 @@ const Order = sequelize.define("Order", {
     allowNull: false,
   },
   status: {
-    type: DataTypes.STRING,
-    defaultValue: "pending",
+    type: DataTypes.ENUM("order taken", "order shipped", "order delivered"),
+    defaultValue: "order taken",
     allowNull: false,
-    validate: {
-      isIn: {
-        args: [["pending", "order taken", "order shipped", "order delivered"]],
-        msg: "Invalid order status",
-      },
-    },
+  },
+  transactionId: {
+    type: DataTypes.STRING,
+    allowNull: true,
   },
 });
 

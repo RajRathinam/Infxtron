@@ -1,8 +1,6 @@
 import React, { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Send } from "lucide-react";
-import Swal from "sweetalert2";
-import { customersAPI } from "../../utils/api";
 
 const Contact = () => {
   const [formData, setFormData] = useState({
@@ -12,7 +10,6 @@ const Contact = () => {
     message: "",
     wantsOffers: false,
   });
-  const [loading, setLoading] = useState(false);
 
   const handleChange = (e) => {
     const { name, value, type, checked } = e.target;
@@ -29,54 +26,21 @@ const Contact = () => {
       email: value ? prev.email : "", // clear email when false
     }));
   };
+  const BASE_URL = import.meta.env.VITE_API_BASE_URL;
+const handleSubmit = async (e) => {
+  e.preventDefault();
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    
-    // Validation
-    if (!formData.name || !formData.phone) {
-      Swal.fire({
-        title: "Missing Information!",
-        text: "Please fill in your name and phone number.",
-        icon: "warning",
-        confirmButtonColor: "#6dce00",
-      });
-      return;
-    }
+  try {
+    const response = await fetch(`${BASE_URL}/api/customers`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(formData),
+    });
 
-    if (!/^\d{10}$/.test(formData.phone)) {
-      Swal.fire({
-        title: "Invalid Phone!",
-        text: "Phone number must be exactly 10 digits.",
-        icon: "error",
-        confirmButtonColor: "#6dce00",
-      });
-      return;
-    }
+    const data = await response.json();
 
-    if (formData.wantsOffers && !formData.email) {
-      Swal.fire({
-        title: "Email Required!",
-        text: "Email is required if you want to receive offers.",
-        icon: "warning",
-        confirmButtonColor: "#6dce00",
-      });
-      return;
-    }
-
-    setLoading(true);
-
-    try {
-      await customersAPI.submitContact(formData);
-      
-      Swal.fire({
-        title: "Message Sent!",
-        text: "Thank you for contacting us. We'll get back to you soon!",
-        icon: "success",
-        confirmButtonColor: "#6dce00",
-      });
-
-      // Reset form
+    if (response.ok) {
+      alert("Thank you! Your message has been sent.");
       setFormData({
         name: "",
         phone: "",
@@ -84,18 +48,15 @@ const Contact = () => {
         message: "",
         wantsOffers: false,
       });
-    } catch (error) {
-      console.error("Contact form error:", error);
-      Swal.fire({
-        title: "Error!",
-        text: error.response?.data?.message || "Failed to send message. Please try again.",
-        icon: "error",
-        confirmButtonColor: "#6dce00",
-      });
-    } finally {
-      setLoading(false);
+    } else {
+      alert(`Error: ${data.message}`);
     }
-  };
+  } catch (error) {
+    console.error("Error submitting form:", error);
+    alert("Something went wrong. Please try again later.");
+  }
+};
+
 
   return (
     <section
@@ -223,13 +184,10 @@ const Contact = () => {
         {/* Submit Button */}
         <button
           type="submit"
-          disabled={loading}
-          className={`w-full bg-[#6dce00]/80 text-white py-2.5 rounded-lg hover:bg-[#5abb00] transition-all flex items-center justify-center gap-2 text-sm font-semibold ${
-            loading ? "opacity-70 cursor-not-allowed" : ""
-          }`}
+          className="w-full bg-[#6dce00]/80 text-white py-2.5 rounded-lg hover:bg-[#5abb00] transition-all flex items-center justify-center gap-2 text-sm font-semibold"
         >
           <Send size={16} />
-          {loading ? "Sending..." : "Send Message"}
+          Send Message
         </button>
       </form>
     </section>
