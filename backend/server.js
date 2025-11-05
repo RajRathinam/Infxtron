@@ -18,44 +18,49 @@ dotenv.config();
 const app = express();
 const PORT = process.env.PORT || 5000;
 
-// 🔹 CORS Setup
+// 🧠 Detect environment
+const isProduction = process.env.NODE_ENV === "production";
+
+// 🔹 CORS Setup (Allow both local and production frontend)
 app.use(
   cors({
-    origin: "https://ags-ilws.onrender.com", // change to http://localhost:5173 if using Vite locally
+    origin: [
+      "https://ags-ilws.onrender.com", // frontend (Render)
+      "http://localhost:5173",         // local dev
+    ],
     credentials: true,
   })
 );
 
-// 🔹 JSON Middleware
 app.use(express.json());
 
-// 🔹 Session Store Setup
+// 🔹 Sequelize Session Store Setup
 const SequelizeStore = connectSessionSequelize(session.Store);
 const sessionStore = new SequelizeStore({ db: sequelize });
 
-// 🔹 Use Session Middleware
+// 🔹 Session Middleware
 app.use(
   session({
     name: "ag_admin",
-    secret: process.env.SESSION_SECRET,
+    secret: process.env.SESSION_SECRET || "secret123",
     resave: false,
     saveUninitialized: false,
     store: sessionStore,
     cookie: {
       maxAge: 1000 * 60 * 60 * 24, // 1 day
-      secure: true, // change to true if using HTTPS
-      sameSite: "lax",
+      secure: isProduction, // true only in production (HTTPS)
+      sameSite: isProduction ? "none" : "lax", // allow cross-site cookies in production
     },
   })
 );
 
-// 🔹 Sync the session table
+// Sync session table
 sessionStore.sync();
 
 // 🔹 Default Route
-app.get("/", (req, res) => {
-  res.send("% Server is running with PostgreSQL + Sequelize + Session Store");
-});
+app.get("/", (req, res) =>
+  res.send("✅ Server is running with PostgreSQL + Sequelize + Render config")
+);
 
 // 🔹 API Routes
 app.use("/api/admin", adminRoutes);
@@ -71,7 +76,7 @@ sequelize
   .then(() => console.log("✅ Database connected successfully"))
   .catch((err) => console.error("❌ Database connection failed:", err));
 
-// ⚠️ Optional: change { force: true } to { alter: true } to avoid dropping tables
+// Sync models (without dropping)
 sequelize
   .sync({ alter: true })
   .then(async () => {
