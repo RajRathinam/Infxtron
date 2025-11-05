@@ -16,14 +16,19 @@ const Header = () => {
     };
 
     updateCartCount();
-
-    // ✅ Listen for custom "cartUpdated" event
     window.addEventListener("cartUpdated", updateCartCount);
 
     return () => window.removeEventListener("cartUpdated", updateCartCount);
   }, []);
 
-  // Smooth scroll navigation for sections
+  // Sync cart count when location changes (so it updates when coming back to main page)
+  useEffect(() => {
+    const stored = JSON.parse(sessionStorage.getItem("cartItems")) || [];
+    if (location.pathname !== "/cart") {
+      setCartCount(stored.length);
+    }
+  }, [location.pathname]);
+
   const handleScroll = (id) => {
     if (location.pathname !== "/") {
       navigate("/");
@@ -35,31 +40,31 @@ const Header = () => {
     }
   };
 
-  // ✅ Navigate to cart and scroll to top
   const handleCartClick = () => {
     navigate("/cart");
+    // No need to set cartCount to 0 here anymore
     setTimeout(() => {
       window.scrollTo({ top: 0, behavior: "smooth" });
     }, 100);
   };
 
-  // Scroll spy effect
-  useEffect(() => {
-    const handleScrollSpy = () => {
-      const sections = ["home", "about", "products", "contact", "cart"];
-      let current = "home";
-      for (const id of sections) {
-        const el = document.getElementById(id);
-        if (el) {
-          const rect = el.getBoundingClientRect();
-          if (rect.top <= 150 && rect.bottom >= 120) {
-            current = id;
-            break;
-          }
+  const handleScrollSpy = () => {
+    const sections = ["home", "about", "products", "contact"];
+    let current = "home";
+    for (const id of sections) {
+      const el = document.getElementById(id);
+      if (el) {
+        const rect = el.getBoundingClientRect();
+        if (rect.top <= 150 && rect.bottom >= 120) {
+          current = id;
+          break;
         }
       }
-      setActiveSection(current);
-    };
+    }
+    setActiveSection(current);
+  };
+
+  useEffect(() => {
     window.addEventListener("scroll", handleScrollSpy);
     return () => window.removeEventListener("scroll", handleScrollSpy);
   }, []);
@@ -74,7 +79,6 @@ const Header = () => {
   return (
     <header className="bg-white fixed top-0 left-0 w-full z-50 shadow-sm backdrop-blur-md bg-opacity-90">
       <div className="max-w-7xl mx-auto px-6 md:px-16 py-4 flex items-center justify-between">
-        {/* Left: Logo */}
         <div
           onClick={() => handleScroll("home")}
           className="cursor-pointer flex items-center gap-2 z-10"
@@ -86,7 +90,6 @@ const Header = () => {
           />
         </div>
 
-        {/* Center: Nav Links (Desktop Only) */}
         <nav className="hidden md:flex gap-10 z-10">
           <button onClick={() => handleScroll("home")} className={linkClass("home")}>
             Home
@@ -102,16 +105,16 @@ const Header = () => {
           </button>
         </nav>
 
-        {/* Right: Cart + Login (Desktop) */}
         <div className="hidden md:flex items-center gap-4 z-10">
           <div className="relative">
             <button
               className="text-gray-600 hover:text-black transition-colors"
-              onClick={handleCartClick} // ✅ Updated here
+              onClick={handleCartClick}
             >
               <ShoppingCart size={22} />
             </button>
-            {cartCount > 0 && (
+            {/* ✅ Show badge only on non-cart pages */}
+            {cartCount > 0 && location.pathname !== "/cart" && (
               <span className="absolute -top-2 -right-2 bg-orange-500 text-white text-xs font-semibold rounded-full h-5 w-5 flex items-center justify-center animate-bounce">
                 {cartCount}
               </span>
@@ -127,16 +130,15 @@ const Header = () => {
           </button>
         </div>
 
-        {/* ✅ Mobile Icons */}
         <div className="md:hidden flex items-center justify-between w-16 z-10">
           <div className="relative flex justify-center items-center">
             <button
-              onClick={handleCartClick} // ✅ Updated here too
+              onClick={handleCartClick}
               className="text-gray-700 hover:text-black transition-colors"
             >
               <ShoppingCart size={22} />
             </button>
-            {cartCount > 0 && (
+            {cartCount > 0 && location.pathname !== "/cart" && (
               <span className="absolute -top-2 -right-2 bg-orange-500 text-white text-[10px] font-semibold rounded-full h-4 w-4 flex items-center justify-center">
                 {cartCount}
               </span>

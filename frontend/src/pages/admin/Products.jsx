@@ -1,17 +1,25 @@
 import React, { useEffect, useState } from "react";
 import { Plus, X, ImagePlus, Pencil, Trash2 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
+import Swal from "sweetalert2";
 
 const Products = () => {
   const [products, setProducts] = useState([]);
   const BASE_URL = import.meta.env.VITE_API_BASE_URL;
 
   const loadProducts = async () => {
-    const res = await fetch(`${BASE_URL}/api/products`);
-    const data = await res.json();
-    setProducts(data || []);
-    console.log(data);
-    
+    try {
+      const res = await fetch(`${BASE_URL}/api/products`);
+      const data = await res.json();
+      setProducts(data || []);
+    } catch (err) {
+      console.error(err);
+      Swal.fire({
+        icon: "error",
+        title: "Failed to load products",
+        text: err.message,
+      });
+    }
   };
 
   useEffect(() => {
@@ -21,6 +29,7 @@ const Products = () => {
   const [formVisible, setFormVisible] = useState(false);
   const [previewImage, setPreviewImage] = useState(null);
   const [editingProduct, setEditingProduct] = useState(null);
+  const [imageFile, setImageFile] = useState(null);
 
   const [formData, setFormData] = useState({
     productName: "",
@@ -38,8 +47,6 @@ const Products = () => {
     description: "",
   });
 
-  const [imageFile, setImageFile] = useState(null);
-
   const handleChange = (e) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
   };
@@ -54,7 +61,6 @@ const Products = () => {
     }
   };
 
-  // Open form for editing
   const handleEdit = (product) => {
     setEditingProduct(product);
     setFormData({
@@ -80,7 +86,6 @@ const Products = () => {
     e.preventDefault();
     const fd = new FormData();
 
-    // Convert comma-separated strings to JSON arrays
     const ingredientsArray = formData.ingredients
       ? formData.ingredients.split(",").map((i) => i.trim())
       : [];
@@ -96,19 +101,36 @@ const Products = () => {
 
     if (imageFile) fd.append("image", imageFile);
 
-    if (editingProduct) {
-      // Update product
-      await fetch(`${BASE_URL}/api/products/${editingProduct.id}`, {
-        method: "PUT",
-        body: fd,
-        credentials: "include",
-      });
-    } else {
-      // Add product
-      await fetch(`${BASE_URL}/api/products`, {
-        method: "POST",
-        body: fd,
-        credentials: "include",
+    try {
+      if (editingProduct) {
+        await fetch(`${BASE_URL}/api/products/${editingProduct.id}`, {
+          method: "PUT",
+          body: fd,
+          credentials: "include",
+        });
+        Swal.fire({
+          icon: "success",
+          title: "Updated!",
+          text: "Product updated successfully.",
+        });
+      } else {
+        await fetch(`${BASE_URL}/api/products`, {
+          method: "POST",
+          body: fd,
+          credentials: "include",
+        });
+        Swal.fire({
+          icon: "success",
+          title: "Added!",
+          text: "Product added successfully.",
+        });
+      }
+    } catch (err) {
+      console.error(err);
+      Swal.fire({
+        icon: "error",
+        title: "Failed!",
+        text: err.message,
       });
     }
 
@@ -135,12 +157,36 @@ const Products = () => {
   };
 
   const handleDelete = async (id) => {
-    if (!window.confirm("Are you sure you want to delete this product?")) return;
-    await fetch(`${BASE_URL}/api/products/${id}`, {
-      method: "DELETE",
-      credentials: "include",
+    const result = await Swal.fire({
+      title: "Are you sure?",
+      text: "This product will be permanently deleted!",
+      icon: "warning",
+      showCancelButton: true,
+      confirmButtonText: "Yes, delete it!",
+      cancelButtonText: "Cancel",
     });
-    await loadProducts();
+
+    if (result.isConfirmed) {
+      try {
+        await fetch(`${BASE_URL}/api/products/${id}`, {
+          method: "DELETE",
+          credentials: "include",
+        });
+        Swal.fire({
+          icon: "success",
+          title: "Deleted!",
+          text: "Product has been deleted.",
+        });
+        await loadProducts();
+      } catch (err) {
+        console.error(err);
+        Swal.fire({
+          icon: "error",
+          title: "Failed!",
+          text: err.message,
+        });
+      }
+    }
   };
 
   return (
@@ -148,9 +194,7 @@ const Products = () => {
       {/* Header */}
       <div>
         <h1 className="text-2xl font-semibold text-gray-800">Products</h1>
-        <p className="text-gray-500">
-          Manage and add your healthy food products.
-        </p>
+        <p className="text-gray-500">Manage and add your healthy food products.</p>
       </div>
 
       {/* Product Table */}
@@ -174,18 +218,11 @@ const Products = () => {
           <tbody>
             {products.length > 0 ? (
               products.map((p) => (
-                <tr
-                  key={p.id}
-                  className="border-b border-gray-300 text-xs hover:bg-green-50 transition"
-                >
+                <tr key={p.id} className="border-b border-gray-300 text-xs hover:bg-green-50 transition">
                   <td className="px-4 py-2 font-medium">{p.productName}</td>
                   <td className="px-4 py-2">{p.packName}</td>
                   <td className="px-4 py-2">
-                    <img
-                      src={p.imagePath}
-                      alt={p.productName}
-                      className="w-10 h-10 rounded object-cover border"
-                    />
+                    <img src={p.imagePath} alt={p.productName} className="w-10 h-10 rounded object-cover border" />
                   </td>
                   <td className="px-4 py-2">{p.weight}</td>
                   <td className="px-4 py-2">{p.proteinIntake}</td>
@@ -196,18 +233,10 @@ const Products = () => {
                   <td className="px-4 py-2">{p.availableTime}</td>
                   <td className="px-4 py-2">
                     <div className="flex gap-2">
-                      <button
-                        title="Edit"
-                        onClick={() => handleEdit(p)}
-                        className="p-1 rounded hover:bg-green-100"
-                      >
+                      <button title="Edit" onClick={() => handleEdit(p)} className="p-1 rounded hover:bg-green-100">
                         <Pencil size={16} className="text-green-700" />
                       </button>
-                      <button
-                        title="Delete"
-                        onClick={() => handleDelete(p.id)}
-                        className="p-1 rounded hover:bg-red-100"
-                      >
+                      <button title="Delete" onClick={() => handleDelete(p.id)} className="p-1 rounded hover:bg-red-100">
                         <Trash2 size={16} className="text-red-600" />
                       </button>
                     </div>
@@ -216,9 +245,7 @@ const Products = () => {
               ))
             ) : (
               <tr>
-                <td colSpan="11" className="text-center py-6 text-gray-500">
-                  No products found.
-                </td>
+                <td colSpan="11" className="text-center py-6 text-gray-500">No products found.</td>
               </tr>
             )}
           </tbody>
