@@ -43,11 +43,12 @@ app.use(
     store: sessionStore,
     cookie: {
       maxAge: 1000 * 60 * 60 * 24, // 1 day
-      secure: false, // change to true if using HTTPS
-      sameSite: "lax",
+      secure: process.env.NODE_ENV === "production", // true on Render
+      sameSite: process.env.NODE_ENV === "production" ? "none" : "lax",
     },
   })
 );
+
 
 // 🔹 Sync the session table
 sessionStore.sync();
