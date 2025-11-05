@@ -37,18 +37,17 @@ const sessionStore = new SequelizeStore({ db: sequelize });
 app.use(
   session({
     name: "ag_admin",
-    secret: process.env.SESSION_SECRET || "secret123",
+    secret: process.env.SESSION_SECRET,
     resave: false,
     saveUninitialized: false,
     store: sessionStore,
     cookie: {
       maxAge: 1000 * 60 * 60 * 24, // 1 day
-      secure: process.env.NODE_ENV === "production", // true on Render
-      sameSite: process.env.NODE_ENV === "production" ? "none" : "lax",
+      secure: true, // change to true if using HTTPS
+      sameSite: "lax",
     },
   })
 );
-
 
 // 🔹 Sync the session table
 sessionStore.sync();
