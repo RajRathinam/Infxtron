@@ -198,7 +198,7 @@ export default function Home() {
             </div>
           ) : (
             <p className="text-center text-gray-500 mt-8">
-              No products available for today.
+              no products available for today.
             </p>
           )}
 
