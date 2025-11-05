@@ -6,4 +6,5 @@ export const login = (token) => {
 
 export const logout = () => {
   localStorage.removeItem("token");
+  localStorage.removeItem("adminEmail"); // Clear admin email if it exists
 };

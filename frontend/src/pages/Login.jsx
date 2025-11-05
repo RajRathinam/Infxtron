@@ -1,14 +1,10 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import axios from "axios";
+import axiosInstance from "../utils/axiosConfig";
 import { login as setToken } from "../utils/auth";
 import { Lock, Mail, Eye, EyeOff } from "lucide-react";
 
 export default function Login() {
-
-  const BASE_URL = import.meta.env.VITE_API_BASE_URL;
-
-
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
@@ -16,22 +12,28 @@ export default function Login() {
   const [errorMsg, setErrorMsg] = useState("");
   const navigate = useNavigate();
 
+  // Clear any stored credentials on mount to prevent auto-fill
+  useEffect(() => {
+    setEmail("");
+    setPassword("");
+    // Clear localStorage adminEmail if it exists
+    localStorage.removeItem("adminEmail");
+  }, []);
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     setErrorMsg("");
     setLoading(true);
 
     try {
-      const res = await axios.post(
-        `${BASE_URL}/api/admin/login`,
-        { email, password },
-        { withCredentials: true }
-      );
+      const res = await axiosInstance.post("/api/admin/login", {
+        email,
+        password,
+      });
 
       if (res.status === 200) {
         // Session cookie is set by backend; store a lightweight token for client routing
         setToken("session");
-        localStorage.setItem("adminEmail", email);
         navigate("/admin");
       }
     } catch (error) {
@@ -101,6 +103,7 @@ export default function Login() {
                 className="w-full outline-none text-sm text-gray-700 placeholder-gray-400"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
+                autoComplete="off"
                 required
               />
             </div>
@@ -117,6 +120,7 @@ export default function Login() {
                 className="w-full outline-none text-sm text-gray-700 placeholder-gray-400 pr-8"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
+                autoComplete="off"
                 required
               />
               <button

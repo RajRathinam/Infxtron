@@ -50,6 +50,8 @@ app.use(
       maxAge: 1000 * 60 * 60 * 24, // 1 day
       secure: isProduction, // true only in production (HTTPS)
       sameSite: isProduction ? "none" : "lax", // allow cross-site cookies in production
+      httpOnly: true, // prevent client-side JavaScript access
+      path: "/", // cookie available for all paths
     },
   })
 );

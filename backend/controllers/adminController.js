@@ -28,10 +28,21 @@ export const adminLogout = async (req, res) => {
   if (req.session) {
     req.session.destroy((err) => {
       if (err) return res.status(500).json({ message: "Logout failed", error: err });
-      res.clearCookie("connect.sid"); // clear cookie
+      res.clearCookie("ag_admin", {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === "production",
+        sameSite: process.env.NODE_ENV === "production" ? "none" : "lax",
+        path: "/",
+      }); // clear cookie with correct name
       res.status(200).json({ message: "Logout successful" });
     });
   } else {
+    res.clearCookie("ag_admin", {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: process.env.NODE_ENV === "production" ? "none" : "lax",
+      path: "/",
+    });
     res.status(200).json({ message: "Logout successful" });
   }
 };
