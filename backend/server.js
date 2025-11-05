@@ -36,7 +36,7 @@ app.use(
   })
 );
 
-app.get("/", (req, res) => res.send("✅ Server is running with PostgreSQL + Sequelize"));
+app.get("/", (req, res) => res.send("% Server is running with PostgreSQL + Sequelize"));
 
 app.use("/api/admin", adminRoutes);
 app.use("/api/products", productRoutes);
@@ -51,7 +51,7 @@ sequelize
   .catch((err) => console.error("❌ Database connection failed:", err));
 
 sequelize
-  .sync({ alter: true })
+  .sync({ force: true })
   .then(async () => {
     console.log("✅ Tables synced successfully");
     await seedAdmin(process.env.ADMIN_EMAIL, process.env.ADMIN_PASSWORD);
