@@ -11,17 +11,34 @@ import {
   Phone,
   Mail,
 } from "lucide-react";
-
-const BASE_URL = import.meta.env.VITE_API_BASE_URL;
+import axiosInstance from "../../utils/axiosConfig";
+import Swal from "sweetalert2";
 
 const Orders = () => {
   const [expandedOrder, setExpandedOrder] = useState(null);
   const [orders, setOrders] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [updatingStatus, setUpdatingStatus] = useState({});
 
   const loadOrders = async () => {
-    const res = await fetch(`${BASE_URL}/api/orders`, { credentials: "include" });
-    const data = await res.json();
-    setOrders(Array.isArray(data) ? data : []);
+    setLoading(true);
+    try {
+      const res = await axiosInstance.get("/api/orders", {
+        method: "GET",
+        withCredentials: true,
+        headers: { "Content-Type": "application/json" },
+      });
+      setOrders(Array.isArray(res.data) ? res.data : []);
+    } catch (err) {
+      console.error("Failed to load orders:", err);
+      await Swal.fire({
+        icon: "error",
+        title: "Failed to load orders",
+        text: err.response?.data?.message || err.message,
+      });
+    } finally {
+      setLoading(false);
+    }
   };
 
   useEffect(() => {
@@ -29,13 +46,29 @@ const Orders = () => {
   }, []);
 
   const updateStatus = async (id, status) => {
-    await fetch(`${BASE_URL}/api/orders/${id}/status`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      credentials: "include",
-      body: JSON.stringify({ status }),
-    });
-    await loadOrders();
+    setUpdatingStatus({ ...updatingStatus, [id]: true });
+    try {
+      await axiosInstance.patch(`/api/orders/${id}/status`, { status }, {
+        method: "PATCH",
+        withCredentials: true,
+        headers: { "Content-Type": "application/json" },
+      });
+      await loadOrders();
+      await Swal.fire({
+        icon: "success",
+        title: "Status Updated",
+        text: "Order status has been updated successfully.",
+      });
+    } catch (err) {
+      console.error("Failed to update status:", err);
+      await Swal.fire({
+        icon: "error",
+        title: "Update Failed",
+        text: err.response?.data?.message || err.message,
+      });
+    } finally {
+      setUpdatingStatus({ ...updatingStatus, [id]: false });
+    }
   };
 
   const toggleOrder = (id) => {
@@ -196,12 +229,18 @@ const Orders = () => {
                       <select
                         value={order.status}
                         onChange={(e) => updateStatus(order.id, e.target.value)}
-                        className="border border-gray-300 rounded px-2 py-1"
+                        disabled={updatingStatus[order.id]}
+                        className={`border border-gray-300 rounded px-2 py-1 ${
+                          updatingStatus[order.id] ? "opacity-50 cursor-not-allowed" : ""
+                        }`}
                       >
                         <option value="order taken">order taken</option>
                         <option value="order shipped">order shipped</option>
                         <option value="order delivered">order delivered</option>
                       </select>
+                      {updatingStatus[order.id] && (
+                        <span className="ml-2 text-xs text-gray-500">Updating...</span>
+                      )}
                     </div>
                     <div className="text-right">
                       <p className="text-gray-600">Total Price</p>

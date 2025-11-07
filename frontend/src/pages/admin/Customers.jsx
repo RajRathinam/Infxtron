@@ -1,6 +1,8 @@
 import React, { useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import { Search } from "lucide-react";
+import axiosInstance from "../../utils/axiosConfig";
+import Swal from "sweetalert2";
 
 const Customers = () => {
   const [customers, setCustomers] = useState([]);
@@ -8,22 +10,34 @@ const Customers = () => {
   const [search, setSearch] = useState("");
   const [filterEmail, setFilterEmail] = useState(false);
 
+  const [loading, setLoading] = useState(false);
+
   // Fetch customers from backend
   useEffect(() => {
     const fetchCustomers = async () => {
+      setLoading(true);
       try {
-        const BASE_URL = import.meta.env.VITE_API_BASE_URL;
-        const res = await fetch(`${BASE_URL}/api/customers`, { credentials: "include" });
-        const data = await res.json();
+        const res = await axiosInstance.get("/api/customers", {
+          method: "GET",
+          withCredentials: true,
+          headers: { "Content-Type": "application/json" },
+        });
 
         // Ensure array
-        const customersData = Array.isArray(data) ? data : [];
+        const customersData = Array.isArray(res.data) ? res.data : [];
         setCustomers(customersData);
         setFiltered(customersData);
       } catch (err) {
         console.error("Failed to fetch customers:", err);
+        await Swal.fire({
+          icon: "error",
+          title: "Failed to load customers",
+          text: err.response?.data?.message || err.message,
+        });
         setCustomers([]);
         setFiltered([]);
+      } finally {
+        setLoading(false);
       }
     };
 

@@ -74,7 +74,7 @@ export default function Home() {
       {/* Home Section with Carousel */}
       <section
         id="home"
-        className="min-h-screen bg-white relative pt-4 px-4 sm:px-6 md:px-16 flex flex-col items-center justify-center"
+        className="min-h-screen bg-gradient-to-b from-emerald-50/50 via-white to-gray-50 relative pt-4 px-4 sm:px-6 md:px-16 flex flex-col items-center justify-center"
       >
         <div className="w-full max-w-7xl mx-auto mb-8 md:mb-12">
           {/* Hero Content */}
@@ -97,7 +97,7 @@ export default function Home() {
               className="relative mb-6"
             >
               <div className="relative inline-block">
-                <div className="absolute inset-0 bg-gradient-to-r from-emerald-400 via-green-400 to-teal-400 blur-3xl opacity-30 -z-10 rounded-full"></div>
+                <div className="absolute inset-0  blur-3xl opacity-30 -z-10 rounded-full"></div>
                 <span className="relative text-5xl sm:text-6xl md:text-7xl lg:text-8xl xl:text-9xl font-black ubuntu leading-tight block">
                   <span className="bg-gradient-to-r from-emerald-600 via-green-500 to-emerald-600 bg-clip-text text-transparent">
                     AG's
@@ -129,7 +129,7 @@ export default function Home() {
             <div className="relative w-full mb-8 md:mb-12">
               <div className="absolute -inset-2 bg-gradient-to-r from-emerald-400 via-green-500 to-teal-400 rounded-[2rem] blur-2xl opacity-40 animate-pulse"></div>
               <motion.div
-                className="relative w-full h-[280px] sm:h-[400px] md:h-[500px] rounded-[2rem] overflow-hidden border-2 border-emerald-100/50 shadow-[0_20px_50px_-15px_rgba(16,185,129,0.5)]"
+                className="relative w-full h-[280px] sm:h-[400px] md:h-[500px] rounded-[2rem] overflow-hidden border-2 border-emerald-100/50"
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.6 }}

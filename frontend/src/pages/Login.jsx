@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import axiosInstance from "../utils/axiosConfig";
 import { login as setToken } from "../utils/auth";
 import { Lock, Mail, Eye, EyeOff } from "lucide-react";
+import Swal from "sweetalert2";
 
 export default function Login() {
   const [email, setEmail] = useState("");
@@ -41,9 +42,13 @@ export default function Login() {
         navigate("/admin");
       }
     } catch (error) {
-      setErrorMsg(
-        error.response?.data?.message || "Invalid credentials. Please try again."
-      );
+      const errorMessage = error.response?.data?.message || "Invalid credentials. Please try again.";
+      setErrorMsg(errorMessage);
+      await Swal.fire({
+        icon: "error",
+        title: "Login Failed",
+        text: errorMessage,
+      });
     } finally {
       setLoading(false);
     }

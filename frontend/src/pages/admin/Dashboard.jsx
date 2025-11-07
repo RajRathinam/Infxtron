@@ -2,6 +2,7 @@ import React, { useEffect, useState, useRef } from "react";
 import { Users, Package, ShoppingBag, Plus, X, Trash2 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import Swal from "sweetalert2";
+import axiosInstance from "../../utils/axiosConfig";
 
 const Dashboard = () => {
   const [stats, setStats] = useState([
@@ -12,17 +13,21 @@ const Dashboard = () => {
 
   const [offers, setOffers] = useState([]);
   const [formVisible, setFormVisible] = useState(false);
+  const [loadingStats, setLoadingStats] = useState(false);
+  const [loadingOffers, setLoadingOffers] = useState(false);
   const formRef = useRef(null);
-  const BASE_URL = import.meta.env.VITE_API_BASE_URL;
 
   // Fetch dashboard stats
   const loadStats = async () => {
+    setLoadingStats(true);
     try {
-      const res = await fetch(`${BASE_URL}/api/admin/dashboard-stats`, {
-        credentials: "include",
+      const res = await axiosInstance.get("/api/admin/dashboard-stats", {
+        method: "GET",
+        withCredentials: true,
+        headers: { "Content-Type": "application/json" },
       });
-      if (res.ok) {
-        const data = await res.json();
+      if (res.status === 200) {
+        const data = res.data;
         setStats([
           { ...stats[0], value: data.totalCustomers || 0 },
           { ...stats[1], value: data.totalOrders || 0 },
@@ -31,21 +36,28 @@ const Dashboard = () => {
       }
     } catch (err) {
       console.error("Failed to fetch stats:", err);
+    } finally {
+      setLoadingStats(false);
     }
   };
 
   // Load offers from backend
   const loadOffers = async () => {
+    setLoadingOffers(true);
     try {
-      const res = await fetch(`${BASE_URL}/api/offers`, {
-        credentials: "include",
+      const res = await axiosInstance.get("/api/offers", {
+        method: "GET",
+        withCredentials: true,
+        headers: { "Content-Type": "application/json" },
       });
-      if (res.ok) {
-        const data = await res.json();
-        setOffers(data.map((o) => ({ ...o, id: o.id || o._id })));
+      if (res.status === 200) {
+        const data = res.data;
+        setOffers(Array.isArray(data) ? data.map((o) => ({ ...o, id: o.id || o._id })) : []);
       }
     } catch (err) {
       console.error("Failed to load offers:", err);
+    } finally {
+      setLoadingOffers(false);
     }
   };
 
@@ -68,19 +80,20 @@ const handleDelete = async (id) => {
   if (!result.isConfirmed) return;
 
   try {
-    const res = await fetch(`${BASE_URL}/api/offers/${id}`, {
+    const res = await axiosInstance.delete(`/api/offers/${id}`, {
       method: "DELETE",
-      credentials: "include",
+      withCredentials: true,
+      headers: { "Content-Type": "application/json" },
     });
-    if (res.ok) {
+    if (res.status === 200) {
       setOffers(offers.filter((o) => o.id !== id));
-      Swal.fire('Deleted!', 'The offer has been deleted.', 'success');
+      await Swal.fire('Deleted!', 'The offer has been deleted.', 'success');
     } else {
-      Swal.fire('Failed!', 'Failed to delete offer.', 'error');
+      await Swal.fire('Failed!', 'Failed to delete offer.', 'error');
     }
   } catch (err) {
     console.error(err);
-    Swal.fire('Error!', 'Failed to delete offer.', 'error');
+    await Swal.fire('Error!', err.response?.data?.message || 'Failed to delete offer.', 'error');
   }
 };
 
@@ -177,7 +190,6 @@ export default Dashboard;
 
 // Offer Form Component
 function OfferBroadcastForm({ reloadOffers }) {
-  const BASE_URL = import.meta.env.VITE_API_BASE_URL;
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [image, setImage] = useState(null);
@@ -194,13 +206,13 @@ const submit = async (e) => {
   if (image) fd.append("image", image);
 
   try {
-    const res = await fetch(`${BASE_URL}/api/offers?notify=${notify}`, {
+    const res = await axiosInstance.post(`/api/offers?notify=${notify}`, fd, {
       method: "POST",
-      credentials: "include",
-      body: fd,
+      withCredentials: true,
+      headers: { "Content-Type": "multipart/form-data" },
     });
 
-    if (res.ok) {
+    if (res.status === 200 || res.status === 201) {
       setTitle("");
       setDescription("");
       setImage(null);
@@ -212,11 +224,11 @@ const submit = async (e) => {
       );
       reloadOffers();
     } else {
-      Swal.fire('Failed!', 'Failed to create offer.', 'error');
+      await Swal.fire('Failed!', 'Failed to create offer.', 'error');
     }
   } catch (err) {
     console.error(err);
-    Swal.fire('Error!', 'Failed to create offer.', 'error');
+    await Swal.fire('Error!', err.response?.data?.message || 'Failed to create offer.', 'error');
   } finally {
     setSubmitting(false);
   }
@@ -254,9 +266,11 @@ const submit = async (e) => {
       <div className="md:col-span-2">
         <button
           disabled={submitting}
-          className="bg-[#6dce00] hover:bg-[#60b800] text-white px-4 py-2 rounded w-full"
+          className={`bg-[#6dce00] hover:bg-[#60b800] text-white px-4 py-2 rounded w-full ${
+            submitting ? "opacity-70 cursor-not-allowed" : ""
+          }`}
         >
-          {submitting ? "Sending..." : "Create Offer"}
+          {submitting ? "Creating..." : "Create Offer"}
         </button>
       </div>
     </form>

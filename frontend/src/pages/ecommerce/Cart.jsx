@@ -2,6 +2,7 @@ import React, { useEffect, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Minus, Plus, Trash2 } from "lucide-react"; // 🗑️ import icon
 import axiosInstance from "../../utils/axiosConfig";
+import Swal from "sweetalert2";
 
 export default function Cart() {
   const [cartItems, setCartItems] = useState([]);
@@ -48,6 +49,7 @@ export default function Cart() {
     address: "",
     wantsOffers: false,
   });
+  const [placingOrder, setPlacingOrder] = useState(false);
 
   const placeOrder = async () => {
     const payload = {
@@ -67,6 +69,7 @@ export default function Cart() {
       transactionId: `PH_${Date.now()}`,
     };
 
+    setPlacingOrder(true);
     try {
       const res = await axiosInstance.post("/api/orders", payload, {
         method: "POST",
@@ -77,11 +80,21 @@ export default function Cart() {
       if (res.status === 200 || res.status === 201) {
         sessionStorage.removeItem("cartItems");
         setCartItems([]);
-        alert("Order placed successfully!");
+        await Swal.fire({
+          icon: "success",
+          title: "Order Placed!",
+          text: "Your order has been placed successfully!",
+        });
       }
     } catch (error) {
       const errorMessage = error.response?.data?.message || "Failed to place order";
-      alert(errorMessage);
+      await Swal.fire({
+        icon: "error",
+        title: "Order Failed",
+        text: errorMessage,
+      });
+    } finally {
+      setPlacingOrder(false);
     }
   };
 
@@ -256,12 +269,15 @@ export default function Cart() {
               ) : (
                 <motion.button
                   onClick={placeOrder}
+                  disabled={placingOrder}
                   initial={{ opacity: 0, y: 20 }}
                   animate={{ opacity: 1, y: 0 }}
-                  whileHover={{ scale: 1.05 }}
-                  className="bg-green-500 hover:bg-green-600 text-white px-8 py-2.5 text-sm md:text-base rounded-lg font-semibold shadow-md transition-all duration-300"
+                  whileHover={{ scale: placingOrder ? 1 : 1.05 }}
+                  className={`bg-green-500 hover:bg-green-600 text-white px-8 py-2.5 text-sm md:text-base rounded-lg font-semibold shadow-md transition-all duration-300 ${
+                    placingOrder ? "opacity-70 cursor-not-allowed" : ""
+                  }`}
                 >
-                  Proceed to Pay
+                  {placingOrder ? "Placing Order..." : "Proceed to Pay"}
                 </motion.button>
               )}
             </div>

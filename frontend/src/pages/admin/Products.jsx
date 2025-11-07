@@ -2,23 +2,32 @@ import React, { useEffect, useState } from "react";
 import { Plus, X, ImagePlus, Pencil, Trash2 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import Swal from "sweetalert2";
+import axiosInstance from "../../utils/axiosConfig";
 
 const Products = () => {
   const [products, setProducts] = useState([]);
-  const BASE_URL = import.meta.env.VITE_API_BASE_URL;
+  const [loading, setLoading] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [deleting, setDeleting] = useState(null);
 
   const loadProducts = async () => {
+    setLoading(true);
     try {
-      const res = await fetch(`${BASE_URL}/api/products`);
-      const data = await res.json();
-      setProducts(data || []);
+      const res = await axiosInstance.get("/api/products", {
+        method: "GET",
+        withCredentials: true,
+        headers: { "Content-Type": "application/json" },
+      });
+      setProducts(res.data || []);
     } catch (err) {
       console.error(err);
-      Swal.fire({
+      await Swal.fire({
         icon: "error",
         title: "Failed to load products",
-        text: err.message,
+        text: err.response?.data?.message || err.message,
       });
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -101,25 +110,26 @@ const Products = () => {
 
     if (imageFile) fd.append("image", imageFile);
 
+    setSubmitting(true);
     try {
       if (editingProduct) {
-        await fetch(`${BASE_URL}/api/products/${editingProduct.id}`, {
+        await axiosInstance.put(`/api/products/${editingProduct.id}`, fd, {
           method: "PUT",
-          body: fd,
-          credentials: "include",
+          withCredentials: true,
+          headers: { "Content-Type": "multipart/form-data" },
         });
-        Swal.fire({
+        await Swal.fire({
           icon: "success",
           title: "Updated!",
           text: "Product updated successfully.",
         });
       } else {
-        await fetch(`${BASE_URL}/api/products`, {
+        await axiosInstance.post("/api/products", fd, {
           method: "POST",
-          body: fd,
-          credentials: "include",
+          withCredentials: true,
+          headers: { "Content-Type": "multipart/form-data" },
         });
-        Swal.fire({
+        await Swal.fire({
           icon: "success",
           title: "Added!",
           text: "Product added successfully.",
@@ -127,33 +137,34 @@ const Products = () => {
       }
     } catch (err) {
       console.error(err);
-      Swal.fire({
+      await Swal.fire({
         icon: "error",
         title: "Failed!",
-        text: err.message,
+        text: err.response?.data?.message || err.message,
       });
+    } finally {
+      setSubmitting(false);
+      setFormData({
+        productName: "",
+        packName: "",
+        weight: "",
+        proteinIntake: "",
+        availableDay: "",
+        availableTime: "",
+        singleOrder: "",
+        weeklySubscription: "",
+        monthlySubscription: "",
+        imagePath: "",
+        ingredients: "",
+        discounts: "",
+        description: "",
+      });
+      setImageFile(null);
+      setPreviewImage(null);
+      setFormVisible(false);
+      setEditingProduct(null);
+      await loadProducts();
     }
-
-    setFormData({
-      productName: "",
-      packName: "",
-      weight: "",
-      proteinIntake: "",
-      availableDay: "",
-      availableTime: "",
-      singleOrder: "",
-      weeklySubscription: "",
-      monthlySubscription: "",
-      imagePath: "",
-      ingredients: "",
-      discounts: "",
-      description: "",
-    });
-    setImageFile(null);
-    setPreviewImage(null);
-    setFormVisible(false);
-    setEditingProduct(null);
-    await loadProducts();
   };
 
   const handleDelete = async (id) => {
@@ -167,12 +178,14 @@ const Products = () => {
     });
 
     if (result.isConfirmed) {
+      setDeleting(id);
       try {
-        await fetch(`${BASE_URL}/api/products/${id}`, {
+        await axiosInstance.delete(`/api/products/${id}`, {
           method: "DELETE",
-          credentials: "include",
+          withCredentials: true,
+          headers: { "Content-Type": "application/json" },
         });
-        Swal.fire({
+        await Swal.fire({
           icon: "success",
           title: "Deleted!",
           text: "Product has been deleted.",
@@ -180,11 +193,13 @@ const Products = () => {
         await loadProducts();
       } catch (err) {
         console.error(err);
-        Swal.fire({
+        await Swal.fire({
           icon: "error",
           title: "Failed!",
-          text: err.message,
+          text: err.response?.data?.message || err.message,
         });
+      } finally {
+        setDeleting(null);
       }
     }
   };
@@ -236,8 +251,19 @@ const Products = () => {
                       <button title="Edit" onClick={() => handleEdit(p)} className="p-1 rounded hover:bg-green-100">
                         <Pencil size={16} className="text-green-700" />
                       </button>
-                      <button title="Delete" onClick={() => handleDelete(p.id)} className="p-1 rounded hover:bg-red-100">
-                        <Trash2 size={16} className="text-red-600" />
+                      <button
+                        title="Delete"
+                        onClick={() => handleDelete(p.id)}
+                        disabled={deleting === p.id}
+                        className={`p-1 rounded hover:bg-red-100 ${
+                          deleting === p.id ? "opacity-50 cursor-not-allowed" : ""
+                        }`}
+                      >
+                        {deleting === p.id ? (
+                          <span className="text-xs">...</span>
+                        ) : (
+                          <Trash2 size={16} className="text-red-600" />
+                        )}
                       </button>
                     </div>
                   </td>
@@ -351,9 +377,18 @@ const Products = () => {
               {/* Submit Button */}
               <button
                 type="submit"
-                className="col-span-full bg-green-600 hover:bg-green-700 text-white py-2 rounded transition"
+                disabled={submitting}
+                className={`col-span-full bg-green-600 hover:bg-green-700 text-white py-2 rounded transition ${
+                  submitting ? "opacity-70 cursor-not-allowed" : ""
+                }`}
               >
-                {editingProduct ? "Update Product" : "Add Product"}
+                {submitting
+                  ? editingProduct
+                    ? "Updating..."
+                    : "Adding..."
+                  : editingProduct
+                  ? "Update Product"
+                  : "Add Product"}
               </button>
             </form>
           </motion.div>
