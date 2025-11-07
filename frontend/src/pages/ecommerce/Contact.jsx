@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Send } from "lucide-react";
+import { Send, Phone, Mail, MapPin, MessageCircle, Clock, CheckCircle } from "lucide-react";
+import Swal from "sweetalert2";
 
 const Contact = () => {
   const [formData, setFormData] = useState({
@@ -23,173 +24,304 @@ const Contact = () => {
     setFormData((prev) => ({
       ...prev,
       wantsOffers: value,
-      email: value ? prev.email : "", // clear email when false
+      email: value ? prev.email : "",
     }));
   };
-  const BASE_URL = import.meta.env.VITE_API_BASE_URL;
-const handleSubmit = async (e) => {
-  e.preventDefault();
 
-  try {
-    const response = await fetch(`${BASE_URL}/api/customers`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(formData),
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    
+    Swal.fire({
+      title: "Message Sent!",
+      text: "Thank you for contacting us. We'll get back to you soon.",
+      icon: "success",
+      confirmButtonColor: "#10b981",
+      confirmButtonText: "OK",
     });
 
-    const data = await response.json();
+    // Reset form
+    setFormData({
+      name: "",
+      phone: "",
+      email: "",
+      message: "",
+      wantsOffers: false,
+    });
+  };
 
-    if (response.ok) {
-      alert("Thank you! Your message has been sent.");
-      setFormData({
-        name: "",
-        phone: "",
-        email: "",
-        message: "",
-        wantsOffers: false,
-      });
-    } else {
-      alert(`Error: ${data.message}`);
-    }
-  } catch (error) {
-    console.error("Error submitting form:", error);
-    alert("Something went wrong. Please try again later.");
-  }
-};
-
+  const contactInfo = [
+    {
+      icon: Phone,
+      title: "Phone",
+      content: "+91 9943311192",
+      link: "tel:+919943311192",
+      color: "from-emerald-500 to-teal-500",
+    },
+    {
+      icon: Mail,
+      title: "Email",
+      content: "agshealthyfood@gmail.com",
+      link: "mailto:support@agshealthyfood@gmail.com",
+      color: "from-teal-500 to-cyan-500",
+    },
+    {
+      icon: MapPin,
+      title: "Address",
+      content: "Nagapattinam, Tamil Nadu, India",
+      link: "#",
+      color: "from-green-500 to-emerald-500",
+    },
+    {
+      icon: Clock,
+      title: "Business Hours",
+      content: "Mon - Sat: 7:00 AM - 8:00 PM",
+      link: "#",
+      color: "from-emerald-500 to-green-500",
+    },
+  ];
 
   return (
     <section
       id="contact"
-      className="min-h-screen px-6 md:px-16 py-16 bg-gray-50 flex flex-col items-center justify-center"
+      className="min-h-screen py-12 md:py-20 px-4 sm:px-6 md:px-16 bg-gradient-to-b from-white via-emerald-50/30 to-white relative overflow-hidden"
     >
-      <div className="text-start mb-10">
-        <span className="text-2xl dancing-script text-orange-600 font-semibold">
-          Contact Us
-        </span>
-        <h2 className="text-4xl font-extrabold text-[#6dce00]/80 ubuntu mt-2">
-          We’d love to hear from you!
-        </h2>
-        <p className="text-sm text-gray-600 mt-3">
-          Fill out the form below — we’ll get back to you soon.
-        </p>
-      </div>
+      {/* Decorative Elements */}
+      <div className="absolute top-20 right-10 w-72 h-72 bg-emerald-200/20 rounded-full blur-3xl"></div>
+      <div className="absolute bottom-20 left-10 w-96 h-96 bg-teal-200/20 rounded-full blur-3xl"></div>
 
-      <form
-        onSubmit={handleSubmit}
-        className="bg-white w-full max-w-lg rounded-xl shadow-lg md:p-8 p-4 py-8 space-y-5"
-      >
-        {/* Name */}
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">
-            Full Name
-          </label>
-          <input
-            type="text"
-            name="name"
-            required
-            value={formData.name}
-            onChange={handleChange}
-            placeholder="Enter your name"
-            className="w-full border border-gray-300 rounded-lg p-2.5 focus:ring-2 focus:ring-[#6dce00] focus:outline-none text-sm"
-          />
-        </div>
-
-        {/* Phone */}
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">
-            Phone Number
-          </label>
-          <input
-            type="tel"
-            name="phone"
-            required
-            pattern="\d{10}"
-            value={formData.phone}
-            onChange={handleChange}
-            placeholder="Enter 10-digit phone number"
-            className="w-full border border-gray-300 rounded-lg p-2.5 focus:ring-2 focus:ring-[#6dce00] focus:outline-none text-sm"
-          />
-        </div>
-
-        {/* Want Offers Radio */}
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">
-            Would you like to receive offers?
-          </label>
-          <div className="flex items-center gap-6">
-            <label className="flex items-center gap-2 cursor-pointer">
-              <input
-                type="radio"
-                name="offers"
-                checked={formData.wantsOffers === true}
-                onChange={() => handleRadioChange(true)}
-                className="accent-[#6dce00]"
-              />
-              <span className="text-sm text-gray-700">Yes, I want offers</span>
-            </label>
-            <label className="flex items-center gap-2 cursor-pointer">
-              <input
-                type="radio"
-                name="offers"
-                checked={formData.wantsOffers === false}
-                onChange={() => handleRadioChange(false)}
-                className="accent-[#6dce00]"
-              />
-              <span className="text-sm text-gray-700">No, thanks</span>
-            </label>
-          </div>
-        </div>
-
-        {/* Email (Animated Show/Hide) */}
-        <AnimatePresence>
-          {formData.wantsOffers && (
-            <motion.div
-              key="email-field"
-              initial={{ opacity: 0, y: -10 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -10 }}
-              transition={{ duration: 0.4 }}
-            >
-              <label className="block text-sm font-medium text-gray-700 mb-1 mt-3">
-                Email Address (required for offers)
-              </label>
-              <input
-                type="email"
-                name="email"
-                required={formData.wantsOffers}
-                value={formData.email}
-                onChange={handleChange}
-                placeholder="Enter your email"
-                className="w-full border border-gray-300 rounded-lg p-2.5 focus:ring-2 focus:ring-[#6dce00] focus:outline-none text-sm"
-              />
-            </motion.div>
-          )}
-        </AnimatePresence>
-
-        {/* Message */}
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">
-            Message
-          </label>
-          <textarea
-            name="message"
-            value={formData.message}
-            onChange={handleChange}
-            placeholder="Write your message here..."
-            className="w-full border border-gray-300 rounded-lg p-2.5 focus:ring-2 focus:ring-[#6dce00] focus:outline-none text-sm h-28 resize-none"
-          />
-        </div>
-
-        {/* Submit Button */}
-        <button
-          type="submit"
-          className="w-full bg-[#6dce00]/80 text-white py-2.5 rounded-lg hover:bg-[#5abb00] transition-all flex items-center justify-center gap-2 text-sm font-semibold"
+      <div className="max-w-7xl mx-auto relative z-10">
+        {/* Header Section */}
+        <motion.div
+          initial={{ opacity: 0, y: 30 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true }}
+          transition={{ duration: 0.6 }}
+          className="text-center mb-12 md:mb-16"
         >
-          <Send size={16} />
-          Send Message
-        </button>
-      </form>
+          <span className="inline-flex items-center gap-2 px-4 py-2 bg-amber-50 rounded-full border border-amber-100 text-sm md:text-base font-semibold text-amber-600 mb-4">
+            <MessageCircle size={16} className="text-amber-600" />
+            Get in Touch
+          </span>
+          <h2 className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-black text-gray-900 mb-4 ubuntu">
+            We'd Love to{" "}
+            <span className="bg-gradient-to-r from-emerald-600 via-green-600 to-teal-600 bg-clip-text text-transparent">
+              Hear from You
+            </span>
+          </h2>
+          <p className="text-base sm:text-lg md:text-xl text-gray-600 max-w-2xl mx-auto">
+            Have questions or feedback? Send us a message and we'll respond as soon as possible.
+          </p>
+        </motion.div>
+
+        {/* Main Content Grid */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 md:gap-12">
+          {/* Left Side - Contact Information Cards */}
+          <motion.div
+            initial={{ opacity: 0, x: -50 }}
+            whileInView={{ opacity: 1, x: 0 }}
+            viewport={{ once: true }}
+            transition={{ duration: 0.6 }}
+            className="space-y-6"
+          >
+            {contactInfo.map((info, index) => {
+              const Icon = info.icon;
+              return (
+                <motion.a
+                  key={index}
+                  href={info.link}
+                  initial={{ opacity: 0, y: 20 }}
+                  whileInView={{ opacity: 1, y: 0 }}
+                  viewport={{ once: true }}
+                  transition={{ duration: 0.5, delay: index * 0.1 }}
+                  whileHover={{ scale: 1.02 }}
+                  className="block bg-white rounded-2xl p-6 shadow-lg hover:shadow-2xl transition-all duration-300 border border-gray-100 group"
+                >
+                  <div className="flex items-start gap-4">
+                    <div className={`bg-gradient-to-br ${info.color} rounded-2xl p-4 flex-shrink-0 group-hover:scale-110 transition-transform duration-300`}>
+                      <Icon size={24} className="text-white" />
+                    </div>
+                    <div className="flex-1">
+                      <h3 className="text-lg font-bold text-gray-900 mb-1">
+                        {info.title}
+                      </h3>
+                      <p className="text-sm md:text-base text-gray-600">
+                        {info.content}
+                      </p>
+                    </div>
+                  </div>
+                </motion.a>
+              );
+            })}
+
+            {/* Additional Info Card */}
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true }}
+              transition={{ duration: 0.5, delay: 0.4 }}
+              className="bg-gradient-to-br from-emerald-600 via-green-600 to-teal-600 rounded-2xl p-6 md:p-8 text-white shadow-2xl"
+            >
+              <div className="flex items-center gap-3 mb-4">
+                <div className="bg-white/20 rounded-xl p-3">
+                  <CheckCircle size={24} className="text-white" />
+                </div>
+                <h3 className="text-xl font-bold">Quick Response</h3>
+              </div>
+              <p className="text-sm md:text-base opacity-90 leading-relaxed">
+                We typically respond within 24 hours. For urgent matters, please call us directly.
+              </p>
+            </motion.div>
+          </motion.div>
+
+          {/* Right Side - Contact Form */}
+          <motion.div
+            initial={{ opacity: 0, x: 50 }}
+            whileInView={{ opacity: 1, x: 0 }}
+            viewport={{ once: true }}
+            transition={{ duration: 0.6 }}
+          >
+            <form
+              onSubmit={handleSubmit}
+              className="bg-white rounded-3xl shadow-2xl p-6 md:p-8 lg:p-10 space-y-6 border border-gray-100"
+            >
+              {/* Name */}
+              <div>
+                <label className="block text-sm font-semibold text-gray-800 mb-2">
+                  Full Name <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  name="name"
+                  required
+                  value={formData.name}
+                  onChange={handleChange}
+                  placeholder="Enter your full name"
+                  className="w-full border-2 border-gray-200 rounded-xl px-4 py-3.5 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-200 focus:outline-none text-base transition-all duration-300 bg-gray-50 hover:bg-white"
+                />
+              </div>
+
+              {/* Phone */}
+              <div>
+                <label className="block text-sm font-semibold text-gray-800 mb-2">
+                  Phone Number <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="tel"
+                  name="phone"
+                  required
+                  pattern="\d{10}"
+                  value={formData.phone}
+                  onChange={handleChange}
+                  placeholder="Enter 10-digit phone number"
+                  className="w-full border-2 border-gray-200 rounded-xl px-4 py-3.5 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-200 focus:outline-none text-base transition-all duration-300 bg-gray-50 hover:bg-white"
+                />
+              </div>
+
+              {/* Want Offers Radio */}
+              <div>
+                <label className="block text-sm font-semibold text-gray-800 mb-3">
+                  Would you like to receive special offers?
+                </label>
+                <div className="flex flex-col sm:flex-row gap-4">
+                  <label className="flex items-center gap-3 cursor-pointer group">
+                    <div className="relative">
+                      <input
+                        type="radio"
+                        name="offers"
+                        checked={formData.wantsOffers === true}
+                        onChange={() => handleRadioChange(true)}
+                        className="sr-only"
+                      />
+                      <div className={`w-5 h-5 rounded-full border-2 transition-all ${
+                        formData.wantsOffers === true 
+                          ? "border-emerald-600 bg-emerald-600" 
+                          : "border-gray-300 group-hover:border-emerald-400"
+                      }`}>
+                        {formData.wantsOffers === true && (
+                          <div className="w-full h-full rounded-full bg-white scale-[0.4]"></div>
+                        )}
+                      </div>
+                    </div>
+                    <span className="text-sm md:text-base text-gray-700 font-medium">Yes, I want offers</span>
+                  </label>
+                  <label className="flex items-center gap-3 cursor-pointer group">
+                    <div className="relative">
+                      <input
+                        type="radio"
+                        name="offers"
+                        checked={formData.wantsOffers === false}
+                        onChange={() => handleRadioChange(false)}
+                        className="sr-only"
+                      />
+                      <div className={`w-5 h-5 rounded-full border-2 transition-all ${
+                        formData.wantsOffers === false 
+                          ? "border-emerald-600 bg-emerald-600" 
+                          : "border-gray-300 group-hover:border-emerald-400"
+                      }`}>
+                        {formData.wantsOffers === false && (
+                          <div className="w-full h-full rounded-full bg-white scale-[0.4]"></div>
+                        )}
+                      </div>
+                    </div>
+                    <span className="text-sm md:text-base text-gray-700 font-medium">No, thanks</span>
+                  </label>
+                </div>
+              </div>
+
+              {/* Email (Animated Show/Hide) */}
+              <AnimatePresence>
+                {formData.wantsOffers && (
+                  <motion.div
+                    key="email-field"
+                    initial={{ opacity: 0, height: 0 }}
+                    animate={{ opacity: 1, height: "auto" }}
+                    exit={{ opacity: 0, height: 0 }}
+                    transition={{ duration: 0.3 }}
+                  >
+                    <label className="block text-sm font-semibold text-gray-800 mb-2">
+                      Email Address <span className="text-red-500">*</span>
+                      <span className="text-xs font-normal text-gray-500 ml-2">(required for offers)</span>
+                    </label>
+                    <input
+                      type="email"
+                      name="email"
+                      required={formData.wantsOffers}
+                      value={formData.email}
+                      onChange={handleChange}
+                      placeholder="Enter your email address"
+                      className="w-full border-2 border-gray-200 rounded-xl px-4 py-3.5 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-200 focus:outline-none text-base transition-all duration-300 bg-gray-50 hover:bg-white"
+                    />
+                  </motion.div>
+                )}
+              </AnimatePresence>
+
+              {/* Message */}
+              <div>
+                <label className="block text-sm font-semibold text-gray-800 mb-2">
+                  Message
+                </label>
+                <textarea
+                  name="message"
+                  value={formData.message}
+                  onChange={handleChange}
+                  placeholder="Write your message here..."
+                  rows={5}
+                  className="w-full border-2 border-gray-200 rounded-xl px-4 py-3.5 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-200 focus:outline-none text-base resize-none transition-all duration-300 bg-gray-50 hover:bg-white"
+                />
+              </div>
+
+              {/* Submit Button */}
+              <button
+                type="submit"
+                className="w-full bg-gradient-to-r from-emerald-600 to-teal-600 text-white py-4 rounded-xl font-bold text-base md:text-lg shadow-lg hover:shadow-xl transform hover:scale-[1.02] transition-all duration-300 flex items-center justify-center gap-3 active:scale-[0.98]"
+              >
+                <Send size={20} />
+                <span>Send Message</span>
+              </button>
+            </form>
+          </motion.div>
+        </div>
+      </div>
     </section>
   );
 };

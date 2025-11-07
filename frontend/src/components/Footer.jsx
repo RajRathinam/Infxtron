@@ -1,125 +1,172 @@
 import React from "react";
-import { Facebook, Instagram, Mail, MapPin, Phone } from "lucide-react";
+import { Facebook, Instagram, Mail, MapPin, Phone, Twitter, Youtube } from "lucide-react";
+import { motion } from "framer-motion";
 
 const Footer = () => {
+  const quickLinks = [
+    { name: "Home", href: "#home" },
+    { name: "Products", href: "#products" },
+    { name: "About Us", href: "#about" },
+    { name: "Contact", href: "#contact" },
+  ];
+
+  const socialLinks = [
+    { icon: Facebook, href: "#", label: "Facebook" },
+    { icon: Instagram, href: "#", label: "Instagram" },
+    { icon: Twitter, href: "#", label: "Twitter" },
+    { icon: Youtube, href: "#", label: "YouTube" },
+  ];
+
   return (
-    <footer className=" bg-gradient-to-b from-green-50 to-white  text-gray-700 pt-14 pb-6 px-8 md:px-16 relative overflow-hidden">
-      {/* Decorative overlay */}
-      <img
-        src="/assets/bg-pattern.png"
-        alt="pattern"
-        className="absolute top-0 right-0 w-[400px] opacity-10 pointer-events-none"
-      />
+    <footer className="bg-gradient-to-b from-emerald-50/50 via-white to-gray-50 text-gray-800 pt-16 pb-8 px-4 sm:px-6 md:px-16 relative overflow-hidden">
+      {/* Decorative Elements */}
+      <div className="absolute top-0 right-0 w-96 h-96 bg-emerald-200/20 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2"></div>
+      <div className="absolute bottom-0 left-0 w-96 h-96 bg-teal-200/20 rounded-full blur-3xl translate-y-1/2 -translate-x-1/2"></div>
 
-      <div className="flex flex-col md:flex-row justify-between gap-10 relative z-10">
-        {/* Brand Section */}
-        <div className="flex-1 flex flex-col items-start">
-          <div className="flex items-center gap-3 mb-3">
-            <img
-              src="/AGHealthyFood.png"
-              alt="AG’s Healthy Food"
-              className="w-40 h-auto object-contain"
-            />
-          </div>
+      <div className="max-w-7xl mx-auto relative z-10">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8 md:gap-12 mb-12">
+          {/* Brand Section */}
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+            transition={{ duration: 0.5 }}
+            className="lg:col-span-2"
+          >
+            <div className="flex items-center gap-3 mb-4">
+              <img
+                src="/AGHealthyFood.png"
+                alt="AG's Healthy Food"
+                className="h-12 w-auto object-contain"
+              />
+            </div>
+            <p className="text-sm md:text-base text-gray-600 leading-relaxed mb-6 max-w-md">
+              Promoting health and freshness through organic meals and pure natural ingredients — 
+              made with care for your well-being. Bringing nature's best to your table.
+            </p>
+            
+            {/* Social Links */}
+            <div className="flex gap-3">
+              {socialLinks.map((social, index) => {
+                const Icon = social.icon;
+                return (
+                  <motion.a
+                    key={index}
+                    href={social.href}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    whileHover={{ scale: 1.1 }}
+                    whileTap={{ scale: 0.95 }}
+                    className="w-10 h-10 bg-gradient-to-br from-emerald-600 to-teal-600 rounded-xl flex items-center justify-center text-white shadow-lg hover:shadow-xl transition-all duration-300"
+                    aria-label={social.label}
+                  >
+                    <Icon size={18} />
+                  </motion.a>
+                );
+              })}
+            </div>
+          </motion.div>
 
-          <p className="text-xs text-justify text-gray-600 leading-relaxed">
-            Promoting health and freshness through organic meals and pure natural
-            ingredients — made with care for your well-being.
-          </p>
-
-          <div className="flex gap-4 mt-5">
-            <a
-              href="#"
-              className="p-2 bg-[#6dce00]/10 rounded-full hover:bg-[#6dce00]/20 transition"
-            >
-              <Facebook className="text-[#6dce00]" size={18} />
-            </a>
-            <a
-              href="#"
-              className="p-2 bg-[#6dce00]/10 rounded-full hover:bg-[#6dce00]/20 transition"
-            >
-              <Instagram className="text-[#6dce00]" size={18} />
-            </a>
-            <a
-              href="mailto:info@agshealthyfood.com"
-              className="p-2 bg-[#6dce00]/10 rounded-full hover:bg-[#6dce00]/20 transition"
-            >
-              <Mail className="text-[#6dce00]" size={18} />
-            </a>
-          </div>
-        </div>
-
-        {/* Links + Contact Section */}
-        <div className="flex-1 flex flex-row justify-between">
           {/* Quick Links */}
-          <div className="flex-1">
-            <h4 className="text-sm font-semibold text-gray-800 mb-4">
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+            transition={{ duration: 0.5, delay: 0.1 }}
+          >
+            <h4 className="text-lg font-bold text-gray-900 mb-6">
               Quick Links
             </h4>
-            <ul className="space-y-2 text-xs text-gray-600">
-              <li>
-                <a
-                  href="#home"
-                  className="hover:text-[#6dce00] transition duration-200"
-                >
-                  Home
-                </a>
-              </li>
-              <li>
-                <a
-                  href="#products"
-                  className="hover:text-[#6dce00] transition duration-200"
-                >
-                  Products
-                </a>
-              </li>
-              <li>
-                <a
-                  href="#about"
-                  className="hover:text-[#6dce00] transition duration-200"
-                >
-                  About Us
-                </a>
-              </li>
-              <li>
-                <a
-                  href="#contact"
-                  className="hover:text-[#6dce00] transition duration-200"
-                >
-                  Contact
-                </a>
-              </li>
+            <ul className="space-y-3">
+              {quickLinks.map((link, index) => (
+                <li key={index}>
+                  <a
+                    href={link.href}
+                    className="text-sm md:text-base text-gray-600 hover:text-emerald-600 transition-colors duration-200 flex items-center gap-2 group"
+                  >
+                    <span className="w-1.5 h-1.5 bg-emerald-600 rounded-full opacity-0 group-hover:opacity-100 transition-opacity"></span>
+                    {link.name}
+                  </a>
+                </li>
+              ))}
             </ul>
-          </div>
+          </motion.div>
 
-          {/* Get in Touch */}
-          <div className="flex-1">
-            <h4 className="text-sm font-semibold text-gray-800 mb-4">
+          {/* Contact Info */}
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+            transition={{ duration: 0.5, delay: 0.2 }}
+          >
+            <h4 className="text-lg font-bold text-gray-900 mb-6">
               Get in Touch
             </h4>
-            <ul className="space-y-3 text-xs text-gray-600">
-              <li className="flex items-center gap-2">
-                <Phone size={16} className="text-[#6dce00]" />
-                <span>+91 98765 43210</span>
+            <ul className="space-y-4">
+              <li className="flex items-start gap-3">
+                <div className="flex-shrink-0 w-10 h-10 bg-emerald-100 rounded-xl flex items-center justify-center">
+                  <Phone size={18} className="text-emerald-600" />
+                </div>
+                <div>
+                  <p className="text-xs text-gray-500 mb-1">Phone</p>
+                  <a href="tel:+919876543210" className="text-sm md:text-base text-gray-700 hover:text-emerald-600 transition-colors">
+                    +91 9943311192
+                  </a>
+                </div>
               </li>
-              <li className="flex items-center gap-2">
-                <Mail size={16} className="text-[#6dce00]" />
-                <span>support@agshealthyfood.com</span>
+              <li className="flex items-start gap-3">
+                <div className="flex-shrink-0 w-10 h-10 bg-emerald-100 rounded-xl flex items-center justify-center">
+                  <Mail size={18} className="text-emerald-600" />
+                </div>
+                <div>
+                  <p className="text-xs text-gray-500 mb-1">Email</p>
+                  <a href="mailto:support@agshealthyfood.com" className="text-sm md:text-base text-gray-700 hover:text-emerald-600 transition-colors break-all">
+                    agshealthyfood@gmail.com
+                  </a>
+                </div>
               </li>
-              <li className="flex items-center gap-2">
-                <MapPin size={16} className="text-[#6dce00]" />
-                <span>Nagapattinam, Tamil Nadu, India</span>
+              <li className="flex items-start gap-3">
+                <div className="flex-shrink-0 w-10 h-10 bg-emerald-100 rounded-xl flex items-center justify-center">
+                  <MapPin size={18} className="text-emerald-600" />
+                </div>
+                <div>
+                  <p className="text-xs text-gray-500 mb-1">Location</p>
+                  <p className="text-sm md:text-base text-gray-700">
+                    Nagapattinam, Tamil Nadu, India
+                  </p>
+                </div>
               </li>
             </ul>
+          </motion.div>
+        </div>
+
+        {/* Divider */}
+        <div className="border-t border-gray-200 pt-8 mt-8">
+          <div className="flex flex-col md:flex-row justify-between items-center gap-4">
+            <p className="text-sm text-gray-600 text-center md:text-left">
+              © {new Date().getFullYear()}{" "}
+              <span className="font-semibold bg-gradient-to-r from-emerald-600 to-teal-600 bg-clip-text text-transparent">
+                AG's Healthy Food
+              </span>
+              . All rights reserved.
+            </p>
+            <p className="text-sm text-gray-500 text-center md:text-left">
+              Powered by{" "}
+              <a 
+                href="https://www.infygrid.in" 
+                target="_blank" 
+                rel="noopener noreferrer"
+                className="font-bold text-emerald-600 hover:text-emerald-700 hover:underline transition-colors"
+              >
+                Infygrid Solutions
+              </a>
+            </p>
+            <div className="flex gap-6 text-sm text-gray-600">
+              <a href="#" className="hover:text-emerald-600 transition-colors">Privacy Policy</a>
+              <a href="#" className="hover:text-emerald-600 transition-colors">Terms of Service</a>
+            </div>
           </div>
         </div>
-      </div>
-
-      {/* Divider Line */}
-      <div className="border-t border-gray-200 mt-10 pt-4 text-center text-sm text-gray-500 relative z-10">
-        © {new Date().getFullYear()}{" "}
-        <span className="text-[#6dce00] font-semibold">AG’s Healthy Food</span>.
-        All rights reserved.
       </div>
     </footer>
   );

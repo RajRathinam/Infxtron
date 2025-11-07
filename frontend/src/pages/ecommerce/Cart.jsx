@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Minus, Plus, Trash2 } from "lucide-react"; // 🗑️ import icon
+import axiosInstance from "../../utils/axiosConfig";
 
 export default function Cart() {
   const [cartItems, setCartItems] = useState([]);
@@ -48,8 +49,6 @@ export default function Cart() {
     wantsOffers: false,
   });
 
-  const BASE_URL = import.meta.env.VITE_API_BASE_URL;
-
   const placeOrder = async () => {
     const payload = {
       name: customer.name,
@@ -68,19 +67,21 @@ export default function Cart() {
       transactionId: `PH_${Date.now()}`,
     };
 
-    const res = await fetch(`${BASE_URL}/api/orders`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-    });
+    try {
+      const res = await axiosInstance.post("/api/orders", payload, {
+        method: "POST",
+        withCredentials: true,
+        headers: { "Content-Type": "application/json" },
+      });
 
-    if (res.ok) {
-      sessionStorage.removeItem("cartItems");
-      setCartItems([]);
-      alert("Order placed successfully!");
-    } else {
-      const data = await res.json().catch(() => ({}));
-      alert(data.message || "Failed to place order");
+      if (res.status === 200 || res.status === 201) {
+        sessionStorage.removeItem("cartItems");
+        setCartItems([]);
+        alert("Order placed successfully!");
+      }
+    } catch (error) {
+      const errorMessage = error.response?.data?.message || "Failed to place order";
+      alert(errorMessage);
     }
   };
 

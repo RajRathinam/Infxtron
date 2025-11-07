@@ -103,8 +103,11 @@ export default function Home() {
                     AG's
                   </span>
                   <br />
+                  <span className="text-black">
+                    Healthy
+                  </span>
                   <span className="bg-gradient-to-r from-green-600 via-emerald-500 to-teal-600 bg-clip-text text-transparent">
-                    Healthy Food
+                    Food
                   </span>
                 </span>
                 <div className="absolute -bottom-2 left-1/2 -translate-x-1/2 w-32 sm:w-40 md:w-48 h-1 bg-gradient-to-r from-transparent via-emerald-500 to-transparent rounded-full"></div>
@@ -253,7 +256,6 @@ export default function Home() {
       </section>
 
       {/* Other Sections */}
-      <About />
       <Products />
       <Contact />
     </div>

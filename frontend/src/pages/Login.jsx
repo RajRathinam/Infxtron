@@ -29,6 +29,10 @@ export default function Login() {
       const res = await axiosInstance.post("/api/admin/login", {
         email,
         password,
+      }, {
+        method: "POST",
+        withCredentials: true,
+        headers: { "Content-Type": "application/json" },
       });
 
       if (res.status === 200) {

@@ -8,6 +8,7 @@ import {
   Plus,
   Minus,
   ShoppingCart,
+  ArrowRight, // ✅ added since you’re using ArrowRight in the new section
 } from "lucide-react";
 
 const Products = () => {
@@ -29,7 +30,6 @@ const Products = () => {
     fetchProducts();
   }, [BASE_URL]);
 
-  // Handle quantity change
   const handleIncrease = (index) => {
     setQuantities((prev) => ({
       ...prev,
@@ -44,7 +44,6 @@ const Products = () => {
     }));
   };
 
-  // Handle order type selection (Single / Weekly / Monthly)
   const handleTypeChange = (index, type) => {
     setSelectedType((prev) => ({
       ...prev,
@@ -52,7 +51,6 @@ const Products = () => {
     }));
   };
 
-  // Get price based on selected type
   const getPrice = (product, index) => {
     const type = selectedType[index] || "singleOrder";
     if (type === "weeklySubscription") return product.weeklySubscription;
@@ -60,55 +58,57 @@ const Products = () => {
     return product.singleOrder;
   };
 
-const handleAddToCart = (product, index) => {
-  const qty = quantities[index] || 1;
-  const orderType = selectedType[index] || "singleOrder";
-  const price =
-    orderType === "weeklySubscription"
-      ? product.weeklySubscription
-      : orderType === "monthlySubscription"
-      ? product.monthlySubscription
-      : product.singleOrder;
+  const handleAddToCart = (product, index) => {
+    const qty = quantities[index] || 1;
+    const orderType = selectedType[index] || "singleOrder";
+    const price =
+      orderType === "weeklySubscription"
+        ? product.weeklySubscription
+        : orderType === "monthlySubscription"
+        ? product.monthlySubscription
+        : product.singleOrder;
 
-  const existing = JSON.parse(sessionStorage.getItem("cartItems")) || [];
+    const existing = JSON.parse(sessionStorage.getItem("cartItems")) || [];
 
-  const cartItem = {
-    ...product,
-    _id: `${product.id || product.productName}-${Date.now()}`,
-    quantity: qty,
-    orderType,
-    price, // 💡 store correct price based on selected type
+    const cartItem = {
+      ...product,
+      _id: `${product.id || product.productName}-${Date.now()}`,
+      quantity: qty,
+      orderType,
+      price,
+    };
+
+    existing.push(cartItem);
+    sessionStorage.setItem("cartItems", JSON.stringify(existing));
+    window.dispatchEvent(new Event("cartUpdated"));
+
+    Swal.fire({
+      title: "Added to Cart!",
+      text: `${product.productName} (${orderType.replace("Subscription", "")}) x${qty} added to your cart.`,
+      icon: "success",
+      confirmButtonColor: "#10b981",
+      confirmButtonText: "OK",
+    });
   };
-
-  existing.push(cartItem);
-  sessionStorage.setItem("cartItems", JSON.stringify(existing));
-  window.dispatchEvent(new Event("cartUpdated"));
-
-  Swal.fire({
-    title: "Added to Cart!",
-    text: `${product.productName} (${orderType.replace("Subscription", "")}) x${qty} added to your cart.`,
-    icon: "success",
-    confirmButtonColor: "#6dce00",
-    confirmButtonText: "OK",
-  });
-};
-
 
   return (
     <section
       id="products"
       className="min-h-screen px-6 md:px-16 py-16 text-gray-800 overflow-hidden relative"
     >
-      <div className="text-start mb-12">
-        <span className="text-2xl dancing-script text-orange-600 font-semibold">
+      <div className="text-start mb-8 md:mb-12">
+        <span className="text-xl sm:text-2xl md:text-3xl dancing-script text-orange-600 font-semibold">
           Our Products
         </span>
-        <h2 className="text-4xl font-extrabold text-[#6dce00]/80 ubuntu mt-2">
-          Wholesome. Organic. Fresh.
+        <h2 className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-black text-gray-900 mb-4 ubuntu">
+          Wholesome.{" "}
+          <span className="bg-gradient-to-r from-emerald-600 via-green-600 to-teal-600 bg-clip-text text-transparent">
+            Organic. Fresh.
+          </span>
         </h2>
-        <p className="text-sm text-gray-600 mt-3">
-          Explore our curated range of organic food products grown with care,
-          packed with love.
+        <p className="text-xs sm:text-sm md:text-base text-gray-600 mt-2 md:mt-3 max-w-2xl">
+          Explore our curated range of healthy food products. Click on any
+          product to see all pack options and subscription plans.
         </p>
       </div>
 
@@ -155,7 +155,6 @@ const handleAddToCart = (product, index) => {
                 </div>
               </div>
 
-              {/* Radio Buttons */}
               <div className="mt-2 flex gap-3 text-xs text-gray-700">
                 <label className="flex items-center gap-1 cursor-pointer">
                   <input
@@ -165,7 +164,7 @@ const handleAddToCart = (product, index) => {
                       (selectedType[index] || "singleOrder") === "singleOrder"
                     }
                     onChange={() => handleTypeChange(index, "singleOrder")}
-                     className="accent-[#6dce00]"
+                    className="accent-[#6dce00]"
                   />
                   Single
                 </label>
@@ -177,7 +176,7 @@ const handleAddToCart = (product, index) => {
                     onChange={() =>
                       handleTypeChange(index, "weeklySubscription")
                     }
-                       className="accent-[#6dce00]"
+                    className="accent-[#6dce00]"
                   />
                   Weekly
                 </label>
@@ -195,13 +194,11 @@ const handleAddToCart = (product, index) => {
                 </label>
               </div>
 
-              {/* Dynamic Price Display */}
               <p className="text-sm font-semibold text-[#6dce00] mt-1">
                 ₹{getPrice(product, index)}{" "}
                 <span className="text-xs text-gray-500">/ item</span>
               </p>
 
-              {/* Quantity and Add to Cart */}
               <div className="flex items-center justify-between mt-3">
                 <div className="flex items-center gap-2">
                   <button
@@ -232,6 +229,30 @@ const handleAddToCart = (product, index) => {
             </div>
           </motion.div>
         ))}
+      </div>
+
+      {/* ✅ Customized Diet Plan Section */}
+      <div className="mt-16 bg-gradient-to-br from-emerald-50 to-teal-50 rounded-3xl p-6 md:p-10 border-2 border-emerald-100 shadow-xl">
+        <div className="text-center mb-6">
+          <h3 className="text-2xl sm:text-3xl md:text-4xl font-black text-gray-900 mb-2">
+            Customized Diet Plan
+          </h3>
+          <p className="text-sm sm:text-base text-gray-600 max-w-2xl mx-auto">
+            Need a personalized meal plan? Get a customized diet plan tailored to
+            your health goals and preferences.
+          </p>
+        </div>
+        <a href="#dietForm"></a>
+        <div className="flex flex-col sm:flex-row gap-4 justify-center items-center">
+          <a href="https://www.infygrid.in">
+            <button className="bg-gradient-to-r from-emerald-600 to-teal-600 text-white px-8 py-4 rounded-2xl font-bold text-base md:text-lg shadow-lg hover:shadow-xl transform hover:scale-105 transition-all duration-300 flex items-center gap-3">
+            <span>Get Customized Diet Plan</span>
+            <ArrowRight size={20} />
+          </button> </a>
+          <p className="text-xs sm:text-sm text-gray-600">
+            Contact us for personalized consultation
+          </p>
+        </div>
       </div>
     </section>
   );
