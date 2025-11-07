@@ -1,5 +1,4 @@
 import express from "express";
-import { isAdmin } from "../middleware/isAdmin.js";
 import upload from "../config/multerConfig.js";
 import {
   createOffer,
@@ -13,9 +12,9 @@ const router = express.Router();
 
 
 // Admin-only routes
-router.get("/", isAdmin, listOffers);
-router.post("/", isAdmin, upload.single("image"), createOffer);
-router.patch("/:id/status", isAdmin, updateOfferStatus);
-router.delete("/:id", isAdmin, deleteOffer);
+router.get("/", listOffers);
+router.post("/", upload.single("image"), createOffer);
+router.patch("/:id/status", updateOfferStatus);
+router.delete("/:id", deleteOffer);
 
 export default router;
