@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Outlet, NavLink, useNavigate } from "react-router-dom";
 import { logout } from "../../utils/auth";
 import { Menu, X, LogOut, KeyRound, User } from "lucide-react";
+import Swal from "sweetalert2";
 
 const BASE_URL = import.meta.env.VITE_API_BASE_URL;
 
@@ -16,7 +17,6 @@ export default function AdminLayout() {
     confirmPassword: "",
   });
   const [loading, setLoading] = useState(false);
-  const [message, setMessage] = useState("");
 
   const handleLogout = async () => {
     try {
@@ -36,7 +36,31 @@ export default function AdminLayout() {
   const handleChangePassword = async (e) => {
     e.preventDefault();
     setLoading(true);
-    setMessage("");
+
+    // Validation
+    if (form.newPassword !== form.confirmPassword) {
+      await Swal.fire({
+        icon: "error",
+        title: "Password Mismatch",
+        text: "New password and confirm password do not match.",
+        confirmButtonColor: "#dc2626",
+        background: "#fef2f2",
+      });
+      setLoading(false);
+      return;
+    }
+
+    if (form.newPassword.length < 6) {
+      await Swal.fire({
+        icon: "warning",
+        title: "Weak Password",
+        text: "Password should be at least 6 characters long.",
+        confirmButtonColor: "#f59e0b",
+        background: "#fffbeb",
+      });
+      setLoading(false);
+      return;
+    }
 
     try {
       const res = await fetch(`${BASE_URL}/api/admin/change-password`, {
@@ -47,18 +71,46 @@ export default function AdminLayout() {
       });
 
       const data = await res.json();
+      
       if (res.ok) {
-        setMessage("✅ Password changed successfully!");
+        await Swal.fire({
+          icon: "success",
+          title: "Password Changed!",
+          text: "Your password has been updated successfully.",
+          confirmButtonColor: "#16a34a",
+          background: "#f0fdf4",
+          timer: 2000,
+          showConfirmButton: true,
+        });
+        
         setForm({ oldPassword: "", newPassword: "", confirmPassword: "" });
-        setTimeout(() => setShowPasswordModal(false), 1500);
+        setShowPasswordModal(false);
       } else {
-        setMessage(`❌ ${data.message}`);
+        await Swal.fire({
+          icon: "error",
+          title: "Failed to Change Password",
+          text: data.message || "Something went wrong. Please try again.",
+          confirmButtonColor: "#dc2626",
+          background: "#fef2f2",
+        });
       }
     } catch (err) {
-      setMessage("❌ Server error, try again later.");
+      await Swal.fire({
+        icon: "error",
+        title: "Server Error",
+        text: "Unable to connect to server. Please try again later.",
+        confirmButtonColor: "#dc2626",
+        background: "#fef2f2",
+      });
     }
 
     setLoading(false);
+  };
+
+  const openChangePasswordModal = () => {
+    setForm({ oldPassword: "", newPassword: "", confirmPassword: "" });
+    setShowPasswordModal(true);
+    setDropdownOpen(false);
   };
 
   const activeClass =
@@ -73,7 +125,7 @@ export default function AdminLayout() {
         <div className="flex items-center gap-2">
           <img
             src="/Logo.png"
-            alt="AG’s Healthy Food Logo"
+            alt="AG's Healthy Food Logo"
             className="w-10 h-10 object-contain"
           />
           <h1 className="text-xl font-semibold text-gray-700">Admin Panel</h1>
@@ -128,10 +180,7 @@ export default function AdminLayout() {
             {dropdownOpen && (
               <div className="absolute right-0 mt-2 w-48 bg-white border border-gray-200 rounded-lg shadow-lg z-50">
                 <button
-                  onClick={() => {
-                    setDropdownOpen(false);
-                    setShowPasswordModal(true);
-                  }}
+                  onClick={openChangePasswordModal}
                   className="w-full flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 transition"
                 >
                   <KeyRound size={16} className="text-gray-500" />
@@ -245,8 +294,8 @@ export default function AdminLayout() {
         {/* Change Password + Logout for Mobile */}
         <div className="px-6 pb-6 space-y-3">
           <button
-            onClick={() => setShowPasswordModal(true)}
-            className="w-full bg-yellow-400 hover:bg-yellow-500 text-white py-2 rounded-md font-medium transition flex items-center justify-center gap-2"
+            onClick={openChangePasswordModal}
+            className="w-full bg-yellow-500 hover:bg-yellow-600 text-white py-2 rounded-md font-medium transition flex items-center justify-center gap-2"
           >
             <KeyRound size={18} />
             Change Password
@@ -267,65 +316,89 @@ export default function AdminLayout() {
 
       {/* Password Modal */}
       {showPasswordModal && (
-        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-xl shadow-lg w-full max-w-md p-6 relative">
             <button
               onClick={() => setShowPasswordModal(false)}
-              className="absolute top-3 right-3 text-gray-600 hover:text-red-500"
+              className="absolute top-3 right-3 text-gray-600 hover:text-red-500 transition"
             >
               <X size={20} />
             </button>
-            <h2 className="text-lg font-semibold text-gray-700 mb-4 flex items-center gap-2">
-              Change Password
-            </h2>
+            
+            <div className="text-center mb-2">
+              <KeyRound className="mx-auto text-yellow-500 mb-3" size={32} />
+              <h2 className="text-xl font-bold text-gray-800">Change Password</h2>
+              <p className="text-gray-600 text-sm mt-1">Update your admin account password</p>
+            </div>
 
-            <form onSubmit={handleChangePassword} className="space-y-4">
-              <input
-                type="password"
-                name="oldPassword"
-                placeholder="Old Password"
-                value={form.oldPassword}
-                onChange={handleInputChange}
-                className="w-full border border-gray-300 rounded-md px-3 py-2 mt-1 focus:outline-none focus:ring-2 focus:ring-[#6dce00]"
-                required
-              />
-              <input
-                type="password"
-                name="newPassword"
-                placeholder="New Password"
-                value={form.newPassword}
-                onChange={handleInputChange}
-                className="w-full border border-gray-300 rounded-md px-3 py-2 mt-1 focus:outline-none focus:ring-2 focus:ring-[#6dce00]"
-                required
-              />
-              <input
-                type="password"
-                name="confirmPassword"
-                placeholder="Confirm New Password"
-                value={form.confirmPassword}
-                onChange={handleInputChange}
-                className="w-full border border-gray-300 rounded-md px-3 py-2 mt-1 focus:outline-none focus:ring-2 focus:ring-[#6dce00]"
-                required
-              />
+            <form onSubmit={handleChangePassword} className="space-y-4 mt-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Current Password
+                </label>
+                <input
+                  type="password"
+                  name="oldPassword"
+                  placeholder="Enter current password"
+                  value={form.oldPassword}
+                  onChange={handleInputChange}
+                  className="w-full border border-gray-300 rounded-lg px-4 py-3 focus:outline-none focus:ring-2 focus:ring-[#6dce00] focus:border-transparent transition"
+                  required
+                  autoComplete="current-password"
+                />
+              </div>
 
-              {message && (
-                <p
-                  className={`text-sm text-center ${
-                    message.startsWith("✅")
-                      ? "text-green-600"
-                      : "text-red-600"
-                  }`}
-                >
-                  {message}
-                </p>
-              )}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  New Password
+                </label>
+                <input
+                  type="password"
+                  name="newPassword"
+                  placeholder="Enter new password"
+                  value={form.newPassword}
+                  onChange={handleInputChange}
+                  className="w-full border border-gray-300 rounded-lg px-4 py-3 focus:outline-none focus:ring-2 focus:ring-[#6dce00] focus:border-transparent transition"
+                  required
+                  autoComplete="new-password"
+                  minLength="6"
+                />
+                <p className="text-xs text-gray-500 mt-1">Minimum 6 characters</p>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Confirm New Password
+                </label>
+                <input
+                  type="password"
+                  name="confirmPassword"
+                  placeholder="Confirm new password"
+                  value={form.confirmPassword}
+                  onChange={handleInputChange}
+                  className="w-full border border-gray-300 rounded-lg px-4 py-3 focus:outline-none focus:ring-2 focus:ring-[#6dce00] focus:border-transparent transition"
+                  required
+                  autoComplete="new-password"
+                />
+              </div>
 
               <button
                 type="submit"
                 disabled={loading}
-                className="w-full bg-[#6dce00] hover:bg-[#60b800] text-white py-2 rounded-md font-medium transition disabled:opacity-50"
+                className={`w-full py-3 rounded-lg font-semibold text-white transition-all ${
+                  loading
+                    ? "bg-gray-400 cursor-not-allowed"
+                    : "bg-gradient-to-r from-[#6dce00] to-green-600 hover:from-[#60b800] hover:to-green-700 shadow-md hover:shadow-lg"
+                }`}
               >
-                {loading ? "Updating..." : "Update Password"}
+                {loading ? (
+                  <div className="flex items-center justify-center gap-2">
+                    <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                    Updating Password...
+                  </div>
+                ) : (
+                  "Update Password"
+                )}
               </button>
             </form>
           </div>

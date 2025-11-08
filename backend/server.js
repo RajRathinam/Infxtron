@@ -19,7 +19,8 @@ const PORT = process.env.PORT || 5000;
 
 app.use(
   cors({
-    origin: "https://ags-ilws.onrender.com", // change to 5173 if using Vite
+    origin: "http://localhost:5173",
+    // origin: "https://ags-ilws.onrender.com",
     credentials: true,
   })
 );

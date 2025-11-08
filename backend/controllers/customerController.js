@@ -1,4 +1,5 @@
 import Customer from "../models/Customer.js";
+import Order from "../models/Order.js";
 
 export const getCustomers = async (req, res) => {
   try {
@@ -32,6 +33,36 @@ export const createCustomer = async (req, res) => {
     console.error("Create customer error:", e);
     res.status(500).json({
       message: "Failed to create customer",
+      error: e.message,
+    });
+  }
+};
+
+
+export const deleteCustomer = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const customer = await Customer.findByPk(id);
+
+    if (!customer) {
+      return res.status(404).json({ message: "Customer not found" });
+    }
+
+    // Check if this customer has any orders
+    const orders = await Order.findAll({ where: { customerId: id } });
+
+    if (orders.length > 0) {
+      return res.status(400).json({
+        message: "Cannot delete customer with existing orders. Delete their orders first.",
+      });
+    }
+
+    await customer.destroy();
+    res.status(200).json({ message: "Customer deleted successfully" });
+  } catch (e) {
+    console.error("Delete customer error:", e);
+    res.status(500).json({
+      message: "Failed to delete customer",
       error: e.message,
     });
   }

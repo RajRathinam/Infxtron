@@ -1,5 +1,5 @@
-import React, { useEffect, useState } from "react";
-import { Plus, X, ImagePlus, Pencil, Trash2 } from "lucide-react";
+import React, { useEffect, useState, useRef } from "react";
+import { Plus, X, ImagePlus, Pencil, Trash2, Eye } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import Swal from "sweetalert2";
 import axiosInstance from "../../utils/axiosConfig";
@@ -10,11 +10,36 @@ const Products = () => {
   const [submitting, setSubmitting] = useState(false);
   const [deleting, setDeleting] = useState(null);
 
+  const [formVisible, setFormVisible] = useState(false);
+  const [previewImage, setPreviewImage] = useState(null);
+  const [editingProduct, setEditingProduct] = useState(null);
+  const [imageFile, setImageFile] = useState(null);
+
+  const [viewProduct, setViewProduct] = useState(null);
+
+  const formRef = useRef(null);
+  const firstInputRef = useRef(null);
+
+  const [formData, setFormData] = useState({
+    productName: "",
+    packName: "",
+    weight: "",
+    proteinIntake: "",
+    availableDay: "",
+    availableTime: "",
+    singleOrder: "",
+    weeklySubscription: "",
+    monthlySubscription: "",
+    imagePath: "",
+    ingredients: "",
+    discounts: "",
+    description: "",
+  });
+
   const loadProducts = async () => {
     setLoading(true);
     try {
       const res = await axiosInstance.get("/api/products", {
-        method: "GET",
         withCredentials: true,
         headers: { "Content-Type": "application/json" },
       });
@@ -35,26 +60,23 @@ const Products = () => {
     loadProducts();
   }, []);
 
-  const [formVisible, setFormVisible] = useState(false);
-  const [previewImage, setPreviewImage] = useState(null);
-  const [editingProduct, setEditingProduct] = useState(null);
-  const [imageFile, setImageFile] = useState(null);
+  // Scroll to form and focus first input when form becomes visible
+  useEffect(() => {
+    if (formVisible && formRef.current) {
+      // Smooth scroll to form
+      formRef.current.scrollIntoView({ 
+        behavior: 'smooth', 
+        block: 'start'
+      });
 
-  const [formData, setFormData] = useState({
-    productName: "",
-    packName: "",
-    weight: "",
-    proteinIntake: "",
-    availableDay: "",
-    availableTime: "",
-    singleOrder: "",
-    weeklySubscription: "",
-    monthlySubscription: "",
-    imagePath: "",
-    ingredients: "",
-    discounts: "",
-    description: "",
-  });
+      // Focus first input after a small delay to ensure form is visible
+      setTimeout(() => {
+        if (firstInputRef.current) {
+          firstInputRef.current.focus();
+        }
+      }, 300);
+    }
+  }, [formVisible]);
 
   const handleChange = (e) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
@@ -114,7 +136,6 @@ const Products = () => {
     try {
       if (editingProduct) {
         await axiosInstance.put(`/api/products/${editingProduct.id}`, fd, {
-          method: "PUT",
           withCredentials: true,
           headers: { "Content-Type": "multipart/form-data" },
         });
@@ -125,7 +146,6 @@ const Products = () => {
         });
       } else {
         await axiosInstance.post("/api/products", fd, {
-          method: "POST",
           withCredentials: true,
           headers: { "Content-Type": "multipart/form-data" },
         });
@@ -181,7 +201,6 @@ const Products = () => {
       setDeleting(id);
       try {
         await axiosInstance.delete(`/api/products/${id}`, {
-          method: "DELETE",
           withCredentials: true,
           headers: { "Content-Type": "application/json" },
         });
@@ -232,7 +251,7 @@ const Products = () => {
           </thead>
           <tbody>
             {products.length > 0 ? (
-              products.map((p) => (
+              [...products].reverse().map((p) => (
                 <tr key={p.id} className="border-b border-gray-300 text-xs hover:bg-green-50 transition">
                   <td className="px-4 py-2 font-medium">{p.productName}</td>
                   <td className="px-4 py-2">{p.packName}</td>
@@ -247,24 +266,48 @@ const Products = () => {
                   <td className="px-4 py-2">{p.availableDay}</td>
                   <td className="px-4 py-2">{p.availableTime}</td>
                   <td className="px-4 py-2">
-                    <div className="flex gap-2">
-                      <button title="Edit" onClick={() => handleEdit(p)} className="p-1 rounded hover:bg-green-100">
-                        <Pencil size={16} className="text-green-700" />
-                      </button>
-                      <button
-                        title="Delete"
+                    <div className="flex justify-center items-center gap-2">
+                      {/* View Button */}
+                      <motion.button
+                        whileHover={{ scale: 1.1, backgroundColor: "#dbeafe" }}
+                        whileTap={{ scale: 0.9 }}
+                        onClick={() => setViewProduct(p)}
+                        className="p-2 bg-blue-50 text-blue-600 rounded-lg hover:bg-blue-100 transition-all duration-200"
+                        title="View Details"
+                      >
+                        <Eye size={16} className="text-blue-600" />
+                      </motion.button>
+
+                      {/* Edit Button */}
+                      <motion.button
+                        whileHover={{ scale: 1.1, backgroundColor: "#dcfce7" }}
+                        whileTap={{ scale: 0.9 }}
+                        onClick={() => handleEdit(p)}
+                        className="p-2 bg-green-50 text-green-600 rounded-lg hover:bg-green-100 transition-all duration-200"
+                        title="Edit Product"
+                      >
+                        <Pencil size={16} className="text-green-600" />
+                      </motion.button>
+
+                      {/* Delete Button */}
+                      <motion.button
+                        whileHover={{ scale: deleting === p.id ? 1 : 1.1, backgroundColor: "#fecaca" }}
+                        whileTap={{ scale: 0.9 }}
                         onClick={() => handleDelete(p.id)}
                         disabled={deleting === p.id}
-                        className={`p-1 rounded hover:bg-red-100 ${
-                          deleting === p.id ? "opacity-50 cursor-not-allowed" : ""
+                        className={`p-2 rounded-lg transition-all duration-200 ${
+                          deleting === p.id 
+                            ? "bg-gray-100 text-gray-400 cursor-not-allowed" 
+                            : "bg-red-50 text-red-600 hover:bg-red-100"
                         }`}
+                        title="Delete Product"
                       >
                         {deleting === p.id ? (
-                          <span className="text-xs">...</span>
+                          <div className="w-4 h-4 border-2 border-gray-400 border-t-transparent rounded-full animate-spin" />
                         ) : (
                           <Trash2 size={16} className="text-red-600" />
                         )}
-                      </button>
+                      </motion.button>
                     </div>
                   </td>
                 </tr>
@@ -308,89 +351,144 @@ const Products = () => {
         </button>
       </div>
 
-      {/* Slide-down Form */}
-      <AnimatePresence>
-        {formVisible && (
-          <motion.div
-            initial={{ opacity: 0, y: -10 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -20 }}
-            transition={{ duration: 0.4 }}
-            className="bg-white shadow-lg border border-gray-200 rounded-xl p-4 mt-2"
-          >
-            <h2 className="text-lg font-semibold text-gray-800 mb-4">
-              {editingProduct ? "Edit Product" : "Add New Product"}
-            </h2>
-
-            <form
-              onSubmit={handleSubmit}
-              className="grid grid-cols-1 sm:grid-cols-2 gap-4"
+      {/* Slide-down Form with ref */}
+      <div ref={formRef}>
+        <AnimatePresence>
+          {formVisible && (
+            <motion.div
+              initial={{ opacity: 0, y: -10 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -20 }}
+              transition={{ duration: 0.4 }}
+              className="bg-white shadow-lg border border-gray-200 rounded-xl p-4 mt-2"
             >
-              {/* Text Fields */}
-              {[
-                { name: "productName", placeholder: "Product Name" },
-                { name: "packName", placeholder: "Pack Name" },
-                { name: "weight", placeholder: "Weight (e.g., 250g)" },
-                { name: "proteinIntake", placeholder: "Protein Intake (e.g., 20g)" },
-                { name: "availableDay", placeholder: "Available Day" },
-                { name: "availableTime", placeholder: "Available Time" },
-                { name: "singleOrder", placeholder: "Single Order Price (₹)" },
-                { name: "weeklySubscription", placeholder: "Weekly Subscription (₹)" },
-                { name: "monthlySubscription", placeholder: "Monthly Subscription (₹)" },
-                { name: "ingredients", placeholder: "Ingredients (comma separated)" },
-                { name: "discounts", placeholder: "Discounts (comma separated)" },
-                { name: "description", placeholder: "Description" },
-              ].map((field) => (
-                <input
-                  key={field.name}
-                  type="text"
-                  name={field.name}
-                  placeholder={field.placeholder}
-                  value={formData[field.name]}
-                  onChange={handleChange}
-                  className="border border-gray-300 rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-green-400"
-                  required={field.name !== "discounts"}
-                />
-              ))}
+              <h2 className="text-lg font-semibold text-gray-800 mb-4">
+                {editingProduct ? "Edit Product" : "Add New Product"}
+              </h2>
 
-              {/* Image Upload */}
-              <div className="flex flex-col items-center justify-center border-dashed border-2 border-gray-300 p-3 rounded">
-                <label className="cursor-pointer flex flex-col items-center">
-                  <ImagePlus size={40} className="text-gray-400" />
-                  <span className="text-gray-500 text-sm mt-1">Upload Image</span>
-                  <input
-                    type="file"
-                    accept="image/*"
-                    className="hidden"
-                    onChange={handleImageChange}
-                  />
-                </label>
-                {previewImage && (
-                  <img
-                    src={previewImage}
-                    alt="Preview"
-                    className="mt-2 w-24 h-24 object-cover rounded border"
-                  />
-                )}
-              </div>
-
-              {/* Submit Button */}
-              <button
-                type="submit"
-                disabled={submitting}
-                className={`col-span-full bg-green-600 hover:bg-green-700 text-white py-2 rounded transition ${
-                  submitting ? "opacity-70 cursor-not-allowed" : ""
-                }`}
+              <form
+                onSubmit={handleSubmit}
+                className="grid grid-cols-1 sm:grid-cols-2 gap-4"
               >
-                {submitting
-                  ? editingProduct
-                    ? "Updating..."
-                    : "Adding..."
-                  : editingProduct
-                  ? "Update Product"
-                  : "Add Product"}
-              </button>
-            </form>
+                {/* Text Fields */}
+                {[
+                  { name: "productName", placeholder: "Product Name" },
+                  { name: "packName", placeholder: "Pack Name" },
+                  { name: "weight", placeholder: "Weight (e.g., 250g)" },
+                  { name: "proteinIntake", placeholder: "Protein Intake (e.g., 20g)" },
+                  { name: "availableDay", placeholder: "Available Day" },
+                  { name: "availableTime", placeholder: "Available Time" },
+                  { name: "singleOrder", placeholder: "Single Order Price (₹)" },
+                  { name: "weeklySubscription", placeholder: "Weekly Subscription (₹)" },
+                  { name: "monthlySubscription", placeholder: "Monthly Subscription (₹)" },
+                  { name: "ingredients", placeholder: "Ingredients (comma separated)" },
+                  { name: "discounts", placeholder: "Discounts (comma separated)" },
+                  { name: "description", placeholder: "Description" },
+                ].map((field, index) => (
+                  <input
+                    key={field.name}
+                    ref={index === 0 ? firstInputRef : null}
+                    type="text"
+                    name={field.name}
+                    placeholder={field.placeholder}
+                    value={formData[field.name]}
+                    onChange={handleChange}
+                    className="border border-gray-300 rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-green-400"
+                    required={field.name !== "discounts"}
+                  />
+                ))}
+
+                {/* Image Upload */}
+                <div className="flex flex-col items-center justify-center border-dashed border-2 border-gray-300 p-3 rounded">
+                  <label className="cursor-pointer flex flex-col items-center">
+                    <ImagePlus size={40} className="text-gray-400" />
+                    <span className="text-gray-500 text-sm mt-1">Upload Image</span>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      className="hidden"
+                      onChange={handleImageChange}
+                    />
+                  </label>
+                  {previewImage && (
+                    <img
+                      src={previewImage}
+                      alt="Preview"
+                      className="mt-2 w-24 h-24 object-cover rounded border"
+                    />
+                  )}
+                </div>
+
+                {/* Submit Button */}
+                <button
+                  type="submit"
+                  disabled={submitting}
+                  className={`col-span-full bg-green-600 hover:bg-green-700 text-white py-2 rounded transition ${submitting ? "opacity-70 cursor-not-allowed" : ""}`}
+                >
+                  {submitting ? (editingProduct ? "Updating..." : "Adding...") : editingProduct ? "Update Product" : "Add Product"}
+                </button>
+              </form>
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </div>
+
+      {/* View Product Popup */}
+      <AnimatePresence>
+        {viewProduct && (
+          <motion.div
+            className="fixed inset-0 bg-black/30 px-5 flex justify-center items-start z-50 overflow-auto"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            onClick={() => setViewProduct(null)}
+          >
+            <motion.div
+              key={viewProduct.id}
+              initial={{ opacity: 0, y: -100 }}
+              animate={{ opacity: 1, y: 100 }}
+              exit={{ opacity: 0, y: -200 }}
+              transition={{ duration: 0.6, ease: "easeInOut" }}
+              className="bg-white rounded-xl shadow-lg w-full max-w-md mt-20 overflow-hidden"
+            >
+              <div className="relative">
+                <img
+                  src={viewProduct.imagePath}
+                  alt={viewProduct.productName}
+                  className="w-full h-56 object-cover"
+                />
+                <span className="absolute top-3 left-3 bg-[#6dce00]/80 text-white text-xs px-3 py-1 rounded-full shadow">
+                  {viewProduct.packName}
+                </span>
+                <button
+                  onClick={() => setViewProduct(null)}
+                  className="absolute top-3 right-3 text-gray-600 hover:text-red-500 rounded-full p-1"
+                >
+                  <X size={18} />
+                </button>
+              </div>
+              <div className="p-5 flex flex-col space-y-2">
+                <h3 className="text-lg font-bold text-gray-800">{viewProduct.productName}</h3>
+                <p className="text-xs text-gray-500">{viewProduct.description}</p>
+                <div className="flex flex-wrap gap-4 text-[12px] text-gray-600 mt-2 items-center">
+                  <div className="flex items-center gap-1">
+                    <span className="text-[#6dce00]">Weight:</span> {viewProduct.weight}
+                  </div>
+                  <div className="flex items-center gap-1">
+                    <span className="text-[#6dce00]">Protein:</span> {viewProduct.proteinIntake}
+                  </div>
+                  <div className="flex items-center gap-1">
+                    <span className="text-[#6dce00]">Day:</span> {viewProduct.availableDay}
+                  </div>
+                  <div className="flex items-center gap-1">
+                    <span className="text-[#6dce00]">Time:</span> {viewProduct.availableTime}
+                  </div>
+                </div>
+                <p className="text-sm font-semibold text-[#6dce00] mt-2">
+                  ₹{viewProduct.singleOrder} <span className="text-xs text-gray-500">/ item</span>
+                </p>
+              </div>
+            </motion.div>
           </motion.div>
         )}
       </AnimatePresence>

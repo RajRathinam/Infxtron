@@ -19,11 +19,19 @@ const Order = sequelize.define("Order", {
     type: DataTypes.ENUM("order taken", "order shipped", "order delivered"),
     defaultValue: "order taken",
     allowNull: false,
+  }
+  ,  paymentMethod: {
+    type: DataTypes.STRING,
+    defaultValue: "cash"
+  },
+  paymentStatus: {
+    type: DataTypes.STRING,
+    defaultValue: "pending" // pending, initiated, completed, failed, cancelled
   },
   transactionId: {
     type: DataTypes.STRING,
-    allowNull: true,
-  },
+    allowNull: true
+  }
 });
 
 // Relationship: One Customer can have many Orders

@@ -74,7 +74,7 @@ export default function Home() {
       {/* Home Section with Carousel */}
       <section
         id="home"
-        className="min-h-screen bg-gradient-to-b from-emerald-50/50 via-white to-gray-50 relative pt-4 px-4 sm:px-6 md:px-16 flex flex-col items-center justify-center"
+        className="min-h-screen bg-gradient-to-b from-emerald-50 via-white to-gray-50 relative pt-4 px-4 sm:px-6 md:px-16 flex flex-col items-center justify-center"
       >
         <div className="w-full max-w-7xl mx-auto mb-8 md:mb-12">
           {/* Hero Content */}
@@ -84,7 +84,7 @@ export default function Home() {
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.6 }}
             >
-              <span className="inline-flex items-center gap-2 px-4 py-2 bg-amber-50 rounded-full border border-amber-100 text-sm md:text-base font-semibold text-amber-600 mb-6">
+              <span className="inline-flex items-center gap-2 px-4 py-2 mt-4 bg-amber-50 rounded-full border border-amber-100 text-sm md:text-base font-semibold text-amber-600 mb-4">
                 <Leaf size={16} className="text-amber-600" />
                 Fresh from Nature
               </span>
@@ -118,7 +118,7 @@ export default function Home() {
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.6, delay: 0.4 }}
-              className="text-base sm:text-lg md:text-xl text-gray-600 max-w-2xl mx-auto leading-relaxed"
+              className="text-xs sm:text-lg md:text-xl text-gray-600 max-w-2xl mx-auto leading-relaxed"
             >
               Discover our range of organic, fresh, and nutritious meals delivered daily to your doorstep.
             </motion.p>
@@ -127,7 +127,7 @@ export default function Home() {
           {/* Carousel Container */}
           {carouselImages.length > 0 ? (
             <div className="relative w-full mb-8 md:mb-12">
-              <div className="absolute -inset-2 bg-gradient-to-r from-emerald-400 via-green-500 to-teal-400 rounded-[2rem] blur-2xl opacity-40 animate-pulse"></div>
+              <div className="absolute -inset-2 rounded-[2rem] blur-2xl opacity-40 animate-pulse"></div>
               <motion.div
                 className="relative w-full h-[280px] sm:h-[400px] md:h-[500px] rounded-[2rem] overflow-hidden border-2 border-emerald-100/50"
                 initial={{ opacity: 0, y: 20 }}
@@ -150,7 +150,7 @@ export default function Home() {
                         className="w-full h-full object-cover"
                       />
                       <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-black/20 to-transparent"></div>
-                      <div className="absolute top-6 left-6 bg-gradient-to-r from-emerald-500 to-teal-500 text-white px-4 py-1.5 rounded-full shadow-xl flex items-center gap-1.5 backdrop-blur-sm border border-white/20">
+                      <div className="absolute top-6 left-6 bg-gradient-to-r from-emerald-500 to-teal-500 text-white px-4 py-1.5 rounded-full  flex items-center gap-1.5 backdrop-blur-sm border border-white/20">
                         <Star size={12} className="fill-white" />
                         <span className="text-xs font-bold">Today's Special</span>
                       </div>

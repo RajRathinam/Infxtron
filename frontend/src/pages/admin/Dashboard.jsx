@@ -223,6 +223,7 @@ const submit = async (e) => {
         'success'
       );
       reloadOffers();
+      setFormVisible(!formVisible);
     } else {
       await Swal.fire('Failed!', 'Failed to create offer.', 'error');
     }

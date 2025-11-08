@@ -58,38 +58,54 @@ const Products = () => {
     return product.singleOrder;
   };
 
-  const handleAddToCart = (product, index) => {
-    const qty = quantities[index] || 1;
-    const orderType = selectedType[index] || "singleOrder";
-    const price =
-      orderType === "weeklySubscription"
-        ? product.weeklySubscription
-        : orderType === "monthlySubscription"
-        ? product.monthlySubscription
-        : product.singleOrder;
+const handleAddToCart = (product, index) => {
+  const qty = quantities[index] || 1;
+  const orderType = selectedType[index] || "singleOrder";
+  const price =
+    orderType === "weeklySubscription"
+      ? product.weeklySubscription
+      : orderType === "monthlySubscription"
+      ? product.monthlySubscription
+      : product.singleOrder;
 
-    const existing = JSON.parse(sessionStorage.getItem("cartItems")) || [];
+  const existing = JSON.parse(sessionStorage.getItem("cartItems")) || [];
 
-    const cartItem = {
-      ...product,
-      _id: `${product.id || product.productName}-${Date.now()}`,
-      quantity: qty,
-      orderType,
-      price,
-    };
-
-    existing.push(cartItem);
-    sessionStorage.setItem("cartItems", JSON.stringify(existing));
-    window.dispatchEvent(new Event("cartUpdated"));
-
-    Swal.fire({
-      title: "Added to Cart!",
-      text: `${product.productName} (${orderType.replace("Subscription", "")}) x${qty} added to your cart.`,
-      icon: "success",
-      confirmButtonColor: "#10b981",
-      confirmButtonText: "OK",
-    });
+  const cartItem = {
+    ...product,
+    _id: `${product.id}-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+    quantity: qty,
+    orderType: orderType, // Make sure this is included
+    price: price,
+    // Include the original product ID for backend reference
+    productId: product.id,
+    productName: product.productName,
+    packName: product.packName,
   };
+
+  existing.push(cartItem);
+  sessionStorage.setItem("cartItems", JSON.stringify(existing));
+  window.dispatchEvent(new Event("cartUpdated"));
+
+  Swal.fire({
+    title: "Added to Cart!",
+    text: `${product.productName} (${getOrderTypeLabel(orderType)}) x${qty} added to your cart.`,
+    icon: "success",
+    confirmButtonColor: "#10b981",
+    confirmButtonText: "OK",
+  });
+};
+
+// Helper function to get display label for order type
+const getOrderTypeLabel = (orderType) => {
+  switch (orderType) {
+    case "weeklySubscription":
+      return "Weekly Plan";
+    case "monthlySubscription":
+      return "Monthly Plan";
+    default:
+      return "Single Order";
+  }
+};
 
   return (
     <section
@@ -245,7 +261,7 @@ const Products = () => {
         <a href="#dietForm"></a>
         <div className="flex flex-col sm:flex-row gap-4 justify-center items-center">
           <a href="https://www.infygrid.in">
-            <button className="bg-gradient-to-r from-emerald-600 to-teal-600 text-white px-8 py-4 rounded-2xl font-bold text-base md:text-lg shadow-lg hover:shadow-xl transform hover:scale-105 transition-all duration-300 flex items-center gap-3">
+            <button className="bg-gradient-to-r from-emerald-600 to-teal-600 text-white px-8 py-4 rounded-2xl font-bold text-sm md:text-lg shadow-lg hover:shadow-xl transform hover:scale-105 transition-all duration-300 flex items-center gap-3">
             <span>Get Customized Diet Plan</span>
             <ArrowRight size={20} />
           </button> </a>
