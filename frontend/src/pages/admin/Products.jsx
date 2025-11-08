@@ -1,8 +1,12 @@
 import React, { useEffect, useState, useRef } from "react";
-import { Plus, X, ImagePlus, Pencil, Trash2, Eye } from "lucide-react";
+import { Plus, X, ImagePlus, Pencil, Trash2, Eye, Tag } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import Swal from "sweetalert2";
 import axiosInstance from "../../utils/axiosConfig";
+import {
+  ShoppingBasket,
+  Dumbbell,
+} from "lucide-react";
 
 const Products = () => {
   const [products, setProducts] = useState([]);
@@ -20,21 +24,73 @@ const Products = () => {
   const formRef = useRef(null);
   const firstInputRef = useRef(null);
 
+  // State for array inputs
+  const [availableDayInput, setAvailableDayInput] = useState("");
+  const [ingredientsInput, setIngredientsInput] = useState("");
+
   const [formData, setFormData] = useState({
     productName: "",
     packName: "",
     weight: "",
     proteinIntake: "",
-    availableDay: "",
+    availableDay: [],
     availableTime: "",
     singleOrder: "",
     weeklySubscription: "",
     monthlySubscription: "",
     imagePath: "",
-    ingredients: "",
+    ingredients: [],
     discounts: "",
     description: "",
   });
+
+  // Helper function to parse availableDay field
+  const parseAvailableDay = (availableDay) => {
+    if (!availableDay) return [];
+    
+    // If it's already an array, return it
+    if (Array.isArray(availableDay)) return availableDay;
+    
+    // If it's a string, try to parse it
+    if (typeof availableDay === 'string') {
+      // Handle the specific malformed format: {"Saturday","Sunday","Monday"}
+      if (availableDay.startsWith('{') && availableDay.endsWith('}')) {
+        try {
+          // Remove curly braces and split by commas
+          const withoutBraces = availableDay.slice(1, -1);
+          // Remove quotes and trim each day
+          const days = withoutBraces.split(',').map(day => 
+            day.replace(/"/g, '').trim()
+          ).filter(day => day);
+          return days;
+        } catch (error) {
+          // Continue to next method if this fails
+        }
+      }
+      
+      // Try JSON.parse for properly formatted arrays
+      try {
+        const parsed = JSON.parse(availableDay);
+        if (Array.isArray(parsed)) {
+          return parsed;
+        }
+      } catch (error) {
+        // Continue to next method if this fails
+      }
+      
+      // Simple comma splitting as fallback
+      try {
+        const days = availableDay.split(',').map(day => 
+          day.replace(/[{"}]/g, '').trim()
+        ).filter(day => day);
+        return days;
+      } catch (error) {
+        // Return empty array if all methods fail
+      }
+    }
+    
+    return [];
+  };
 
   const loadProducts = async () => {
     setLoading(true);
@@ -63,13 +119,11 @@ const Products = () => {
   // Scroll to form and focus first input when form becomes visible
   useEffect(() => {
     if (formVisible && formRef.current) {
-      // Smooth scroll to form
       formRef.current.scrollIntoView({ 
         behavior: 'smooth', 
         block: 'start'
       });
 
-      // Focus first input after a small delay to ensure form is visible
       setTimeout(() => {
         if (firstInputRef.current) {
           firstInputRef.current.focus();
@@ -92,6 +146,58 @@ const Products = () => {
     }
   };
 
+  // Add day to availableDay array
+  const addAvailableDay = () => {
+    const day = availableDayInput.trim();
+    if (day && !formData.availableDay.includes(day)) {
+      setFormData({
+        ...formData,
+        availableDay: [...formData.availableDay, day]
+      });
+      setAvailableDayInput("");
+    }
+  };
+
+  // Remove day from availableDay array
+  const removeAvailableDay = (dayToRemove) => {
+    setFormData({
+      ...formData,
+      availableDay: formData.availableDay.filter(day => day !== dayToRemove)
+    });
+  };
+
+  // Add ingredient to ingredients array
+  const addIngredient = () => {
+    const ingredient = ingredientsInput.trim();
+    if (ingredient && !formData.ingredients.includes(ingredient)) {
+      setFormData({
+        ...formData,
+        ingredients: [...formData.ingredients, ingredient]
+      });
+      setIngredientsInput("");
+    }
+  };
+
+  // Remove ingredient from ingredients array
+  const removeIngredient = (ingredientToRemove) => {
+    setFormData({
+      ...formData,
+      ingredients: formData.ingredients.filter(ingredient => ingredient !== ingredientToRemove)
+    });
+  };
+
+  // Handle Enter key for both inputs
+  const handleKeyPress = (e, type) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      if (type === 'day') {
+        addAvailableDay();
+      } else if (type === 'ingredient') {
+        addIngredient();
+      }
+    }
+  };
+
   const handleEdit = (product) => {
     setEditingProduct(product);
     setFormData({
@@ -99,17 +205,19 @@ const Products = () => {
       packName: product.packName || "",
       weight: product.weight || "",
       proteinIntake: product.proteinIntake || "",
-      availableDay: product.availableDay || "",
+      availableDay: Array.isArray(product.availableDay) ? product.availableDay : [],
       availableTime: product.availableTime || "",
       singleOrder: product.singleOrder || "",
       weeklySubscription: product.weeklySubscription || "",
       monthlySubscription: product.monthlySubscription || "",
       imagePath: product.imagePath || "",
-      ingredients: product.ingredients ? product.ingredients.join(",") : "",
+      ingredients: Array.isArray(product.ingredients) ? product.ingredients : [],
       discounts: product.discounts ? product.discounts.join(",") : "",
       description: product.description || "",
     });
     setPreviewImage(product.imagePath || null);
+    setAvailableDayInput("");
+    setIngredientsInput("");
     setFormVisible(true);
   };
 
@@ -117,17 +225,18 @@ const Products = () => {
     e.preventDefault();
     const fd = new FormData();
 
-    const ingredientsArray = formData.ingredients
-      ? formData.ingredients.split(",").map((i) => i.trim())
-      : [];
     const discountsArray = formData.discounts
       ? formData.discounts.split(",").map((d) => d.trim())
       : [];
 
     Object.entries(formData).forEach(([k, v]) => {
-      if (k === "ingredients") fd.append(k, JSON.stringify(ingredientsArray));
-      else if (k === "discounts") fd.append(k, JSON.stringify(discountsArray));
-      else fd.append(k, v);
+      if (k === "availableDay" || k === "ingredients") {
+        fd.append(k, JSON.stringify(v));
+      } else if (k === "discounts") {
+        fd.append(k, JSON.stringify(discountsArray));
+      } else {
+        fd.append(k, v);
+      }
     });
 
     if (imageFile) fd.append("image", imageFile);
@@ -169,16 +278,18 @@ const Products = () => {
         packName: "",
         weight: "",
         proteinIntake: "",
-        availableDay: "",
+        availableDay: [],
         availableTime: "",
         singleOrder: "",
         weeklySubscription: "",
         monthlySubscription: "",
         imagePath: "",
-        ingredients: "",
+        ingredients: [],
         discounts: "",
         description: "",
       });
+      setAvailableDayInput("");
+      setIngredientsInput("");
       setImageFile(null);
       setPreviewImage(null);
       setFormVisible(false);
@@ -223,6 +334,12 @@ const Products = () => {
     }
   };
 
+  // Format array for display in table
+  const formatArrayDisplay = (arr) => {
+    if (!Array.isArray(arr)) return "-";
+    return arr.slice(0, 2).join(", ") + (arr.length > 2 ? `... (+${arr.length - 2})` : "");
+  };
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -244,7 +361,8 @@ const Products = () => {
               <th className="px-4 py-3">Single</th>
               <th className="px-4 py-3">Weekly</th>
               <th className="px-4 py-3">Monthly</th>
-              <th className="px-4 py-3">Day</th>
+              <th className="px-4 py-3">Available Days</th>
+              <th className="px-4 py-3">Ingredients</th>
               <th className="px-4 py-3">Time</th>
               <th className="px-4 py-3">Action</th>
             </tr>
@@ -263,7 +381,12 @@ const Products = () => {
                   <td className="px-4 py-2">₹{p.singleOrder}</td>
                   <td className="px-4 py-2">₹{p.weeklySubscription}</td>
                   <td className="px-4 py-2">₹{p.monthlySubscription}</td>
-                  <td className="px-4 py-2">{p.availableDay}</td>
+                  <td className="px-4 py-2" title={Array.isArray(p.availableDay) ? p.availableDay.join(", ") : p.availableDay}>
+                    {formatArrayDisplay(p.availableDay)}
+                  </td>
+                  <td className="px-4 py-2" title={Array.isArray(p.ingredients) ? p.ingredients.join(", ") : p.ingredients}>
+                    {formatArrayDisplay(p.ingredients)}
+                  </td>
                   <td className="px-4 py-2">{p.availableTime}</td>
                   <td className="px-4 py-2">
                     <div className="flex justify-center items-center gap-2">
@@ -314,7 +437,7 @@ const Products = () => {
               ))
             ) : (
               <tr>
-                <td colSpan="11" className="text-center py-6 text-gray-500">No products found.</td>
+                <td colSpan="12" className="text-center py-6 text-gray-500">No products found.</td>
               </tr>
             )}
           </tbody>
@@ -332,16 +455,18 @@ const Products = () => {
               packName: "",
               weight: "",
               proteinIntake: "",
-              availableDay: "",
+              availableDay: [],
               availableTime: "",
               singleOrder: "",
               weeklySubscription: "",
               monthlySubscription: "",
               imagePath: "",
-              ingredients: "",
+              ingredients: [],
               discounts: "",
               description: "",
             });
+            setAvailableDayInput("");
+            setIngredientsInput("");
             setPreviewImage(null);
           }}
           className="flex items-center gap-2 bg-[#6dce00] hover:bg-[#5bb300] text-white px-5 py-2.5 rounded-lg shadow-md transition"
@@ -360,7 +485,7 @@ const Products = () => {
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -20 }}
               transition={{ duration: 0.4 }}
-              className="bg-white shadow-lg border border-gray-200 rounded-xl p-4 mt-2"
+              className="bg-white shadow-lg border border-gray-200 rounded-xl p-6 mt-4"
             >
               <h2 className="text-lg font-semibold text-gray-800 mb-4">
                 {editingProduct ? "Edit Product" : "Add New Product"}
@@ -368,7 +493,7 @@ const Products = () => {
 
               <form
                 onSubmit={handleSubmit}
-                className="grid grid-cols-1 sm:grid-cols-2 gap-4"
+                className="grid grid-cols-1 md:grid-cols-2 gap-4"
               >
                 {/* Text Fields */}
                 {[
@@ -376,12 +501,10 @@ const Products = () => {
                   { name: "packName", placeholder: "Pack Name" },
                   { name: "weight", placeholder: "Weight (e.g., 250g)" },
                   { name: "proteinIntake", placeholder: "Protein Intake (e.g., 20g)" },
-                  { name: "availableDay", placeholder: "Available Day" },
-                  { name: "availableTime", placeholder: "Available Time" },
+                  { name: "availableTime", placeholder: "Available Time (e.g., Morning, Evening)" },
                   { name: "singleOrder", placeholder: "Single Order Price (₹)" },
                   { name: "weeklySubscription", placeholder: "Weekly Subscription (₹)" },
                   { name: "monthlySubscription", placeholder: "Monthly Subscription (₹)" },
-                  { name: "ingredients", placeholder: "Ingredients (comma separated)" },
                   { name: "discounts", placeholder: "Discounts (comma separated)" },
                   { name: "description", placeholder: "Description" },
                 ].map((field, index) => (
@@ -398,8 +521,88 @@ const Products = () => {
                   />
                 ))}
 
+                {/* Available Days Input */}
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-gray-700">Available Days</label>
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      placeholder="Add day (e.g., Monday)"
+                      value={availableDayInput}
+                      onChange={(e) => setAvailableDayInput(e.target.value)}
+                      onKeyPress={(e) => handleKeyPress(e, 'day')}
+                      className="flex-1 border border-gray-300 rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-green-400"
+                    />
+                    <button
+                      type="button"
+                      onClick={addAvailableDay}
+                      className="bg-green-500 text-white px-3 py-2 rounded hover:bg-green-600 transition"
+                    >
+                      <Plus size={16} />
+                    </button>
+                  </div>
+                  <div className="flex flex-wrap gap-2 mt-2">
+                    {formData.availableDay.map((day, index) => (
+                      <span
+                        key={index}
+                        className="inline-flex items-center gap-1 bg-green-100 text-green-800 px-3 py-1 rounded-full text-sm"
+                      >
+                        <Tag size={12} />
+                        {day}
+                        <button
+                          type="button"
+                          onClick={() => removeAvailableDay(day)}
+                          className="text-green-600 hover:text-green-800 ml-1"
+                        >
+                          <X size={12} />
+                        </button>
+                      </span>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Ingredients Input */}
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-gray-700">Ingredients</label>
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      placeholder="Add ingredient"
+                      value={ingredientsInput}
+                      onChange={(e) => setIngredientsInput(e.target.value)}
+                      onKeyPress={(e) => handleKeyPress(e, 'ingredient')}
+                      className="flex-1 border border-gray-300 rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-green-400"
+                    />
+                    <button
+                      type="button"
+                      onClick={addIngredient}
+                      className="bg-blue-500 text-white px-3 py-2 rounded hover:bg-blue-600 transition"
+                    >
+                      <Plus size={16} />
+                    </button>
+                  </div>
+                  <div className="flex flex-wrap gap-2 mt-2">
+                    {formData.ingredients.map((ingredient, index) => (
+                      <span
+                        key={index}
+                        className="inline-flex items-center gap-1 bg-blue-100 text-blue-800 px-3 py-1 rounded-full text-sm"
+                      >
+                        <Tag size={12} />
+                        {ingredient}
+                        <button
+                          type="button"
+                          onClick={() => removeIngredient(ingredient)}
+                          className="text-blue-600 hover:text-blue-800 ml-1"
+                        >
+                          <X size={12} />
+                        </button>
+                      </span>
+                    ))}
+                  </div>
+                </div>
+
                 {/* Image Upload */}
-                <div className="flex flex-col items-center justify-center border-dashed border-2 border-gray-300 p-3 rounded">
+                <div className="flex flex-col items-center justify-center border-dashed border-2 border-gray-300 p-4 rounded">
                   <label className="cursor-pointer flex flex-col items-center">
                     <ImagePlus size={40} className="text-gray-400" />
                     <span className="text-gray-500 text-sm mt-1">Upload Image</span>
@@ -423,7 +626,7 @@ const Products = () => {
                 <button
                   type="submit"
                   disabled={submitting}
-                  className={`col-span-full bg-green-600 hover:bg-green-700 text-white py-2 rounded transition ${submitting ? "opacity-70 cursor-not-allowed" : ""}`}
+                  className={`col-span-full bg-green-600 hover:bg-green-700 text-white py-3 rounded transition font-medium ${submitting ? "opacity-70 cursor-not-allowed" : ""}`}
                 >
                   {submitting ? (editingProduct ? "Updating..." : "Adding...") : editingProduct ? "Update Product" : "Add Product"}
                 </button>
@@ -450,6 +653,7 @@ const Products = () => {
               exit={{ opacity: 0, y: -200 }}
               transition={{ duration: 0.6, ease: "easeInOut" }}
               className="bg-white rounded-xl shadow-lg w-full max-w-md mt-20 overflow-hidden"
+              onClick={(e) => e.stopPropagation()}
             >
               <div className="relative">
                 <img
@@ -462,30 +666,56 @@ const Products = () => {
                 </span>
                 <button
                   onClick={() => setViewProduct(null)}
-                  className="absolute top-3 right-3 text-gray-600 hover:text-red-500 rounded-full p-1"
+                  className="absolute top-3 right-3 bg-white/90 backdrop-blur-sm rounded-full p-1 shadow-lg hover:bg-white transition-all"
                 >
-                  <X size={18} />
+                  <X size={16} className="text-gray-800" />
                 </button>
               </div>
-              <div className="p-5 flex flex-col space-y-2">
-                <h3 className="text-lg font-bold text-gray-800">{viewProduct.productName}</h3>
+
+              <div className="p-5 flex flex-col space-y-3">
+                {/* Title */}
+                <h3 className="text-lg font-bold text-gray-800">
+                  {viewProduct.productName}
+                </h3>
+
+                {/* Description */}
                 <p className="text-xs text-gray-500">{viewProduct.description}</p>
-                <div className="flex flex-wrap gap-4 text-[12px] text-gray-600 mt-2 items-center">
+
+                {/* Weight and Protein */}
+                <div className="flex flex-wrap gap-4 text-[12px] text-gray-600 items-center">
                   <div className="flex items-center gap-1">
-                    <span className="text-[#6dce00]">Weight:</span> {viewProduct.weight}
+                    <ShoppingBasket size={14} className="text-[#6dce00]" />
+                    <span>Weight: {viewProduct.weight}</span>
                   </div>
                   <div className="flex items-center gap-1">
-                    <span className="text-[#6dce00]">Protein:</span> {viewProduct.proteinIntake}
-                  </div>
-                  <div className="flex items-center gap-1">
-                    <span className="text-[#6dce00]">Day:</span> {viewProduct.availableDay}
-                  </div>
-                  <div className="flex items-center gap-1">
-                    <span className="text-[#6dce00]">Time:</span> {viewProduct.availableTime}
+                    <Dumbbell size={14} className="text-[#6dce00]" />
+                    <span>Protein: {viewProduct.proteinIntake}</span>
                   </div>
                 </div>
-                <p className="text-sm font-semibold text-[#6dce00] mt-2">
-                  ₹{viewProduct.singleOrder} <span className="text-xs text-gray-500">/ item</span>
+
+                {/* Available Days */}
+                <div>
+                  <h4 className="text-xs font-semibold text-gray-700 mb-2">Available Days:</h4>
+                  <div className="flex flex-wrap gap-2">
+                    {(() => {
+                      const availableDays = parseAvailableDay(viewProduct.availableDay);
+                      return availableDays.length > 0 ? (
+                        availableDays.map((day, index) => (
+                          <span key={index} className="bg-green-100 text-green-800 px-2 py-1 rounded-full text-xs">
+                            {day}
+                          </span>
+                        ))
+                      ) : (
+                        <span className="text-gray-500 text-xs">No days specified</span>
+                      );
+                    })()}
+                  </div>
+                </div>
+
+                {/* Rate */}
+                <p className="text-sm font-semibold text-[#6dce00]">
+                  ₹{viewProduct.singleOrder}{" "}
+                  <span className="text-xs text-gray-500">/ item</span>
                 </p>
               </div>
             </motion.div>

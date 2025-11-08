@@ -58,6 +58,129 @@ export const deleteOrder = async (req, res) => {
   }
 };
 
+
+// Updated Place Order
+export const placeOrder = async (req, res) => {
+  const { 
+    name, 
+    phone, 
+    email, 
+    address, 
+    wantsOffers, 
+    products, 
+    totalPrice, 
+    transactionId,
+    deliveryPoint,
+    deliveryCharge,
+    paymentMethod,
+    paymentStatus 
+  } = req.body;
+
+  // Validate required fields
+  if (!name || !phone || !products || !totalPrice || !address || !deliveryPoint) {
+    return res.status(400).json({ 
+      message: "All required fields must be filled: name, phone, products, totalPrice, address, deliveryPoint" 
+    });
+  }
+
+  if (wantsOffers && !email) {
+    return res.status(400).json({ 
+      message: "Email is required if customer wants offers details" 
+    });
+  }
+
+  if (!/^\d{10}$/.test(phone)) {
+    return res.status(400).json({ 
+      message: "Phone number must be exactly 10 digits" 
+    });
+  }
+
+  // Validate delivery point
+  const validDeliveryPoints = ["point_a", "point_b", "point_c", "home_delivery"];
+  if (!validDeliveryPoints.includes(deliveryPoint)) {
+    return res.status(400).json({ 
+      message: `Invalid delivery point. Must be one of: ${validDeliveryPoints.join(", ")}` 
+    });
+  }
+
+  try {
+    // Create customer
+    const customer = await Customer.create({ 
+      name, 
+      phone, 
+      email, 
+      address, 
+      wantsOffers 
+    });
+
+    // Create order with all fields
+    const order = await Order.create({
+      customerId: customer.id,
+      products,
+      totalPrice: Math.round(totalPrice),
+      deliveryAddress: address,
+      deliveryPoint,
+      deliveryCharge: deliveryCharge || 0,
+      paymentMethod: paymentMethod || "upi",
+      paymentStatus: paymentStatus || "initiated",
+      transactionId: transactionId || `TXN_${Date.now()}`,
+    });
+
+    // Return consistent response
+    res.status(201).json({ 
+      message: "Order placed successfully", 
+      order: {
+        id: order.id,
+        customerId: order.customerId,
+        products: order.products,
+        totalPrice: order.totalPrice,
+        deliveryAddress: order.deliveryAddress,
+        deliveryPoint: order.deliveryPoint,
+        deliveryCharge: order.deliveryCharge,
+        paymentMethod: order.paymentMethod,
+        paymentStatus: order.paymentStatus,
+        transactionId: order.transactionId,
+        status: order.status,
+        createdAt: order.createdAt,
+        updatedAt: order.updatedAt
+      }
+    });
+
+  } catch (err) {
+    console.error("Order placement error:", err);
+    res.status(500).json({ 
+      message: "Failed to place order", 
+      error: err.message 
+    });
+  }
+};
+
+
+// In your orderController.js
+export const updatePaymentStatus = async (req, res) => {
+  const { id } = req.params;
+  const { paymentStatus } = req.body;
+
+  try {
+    const order = await Order.findByPk(id);
+    if (!order) return res.status(404).json({ message: "Order not found" });
+
+    order.paymentStatus = paymentStatus;
+    await order.save();
+
+    res.status(200).json({ 
+      message: `Payment status updated to '${paymentStatus}'`, 
+      order 
+    });
+  } catch (err) {
+    res.status(500).json({ 
+      message: "Failed to update payment status", 
+      error: err.message 
+    });
+  }
+};
+
+
 export const sendOrderEmail = async (req, res) => {
   const { id } = req.params;
 
@@ -259,64 +382,6 @@ export const sendOrderEmail = async (req, res) => {
       error: err.message,
       orderId: id,
       details: "Check server logs for more information"
-    });
-  }
-};
-
-// Place Order
-export const placeOrder = async (req, res) => {
-  const { name, phone, email, address, wantsOffers, products, totalPrice, transactionId } = req.body;
-
-  if (!name || !phone || !products || !totalPrice || !address) {
-    return res.status(400).json({ message: "All required fields must be filled" });
-  }
-
-  if (wantsOffers && !email) {
-    return res.status(400).json({ message: "Email is required if customer wants offers details" });
-  }
-
-  if (!/^\d{10}$/.test(phone)) {
-    return res.status(400).json({ message: "Phone number must be exactly 10 digits" });
-  }
-
-  try {
-    const customer = await Customer.create({ name, phone, email, address, wantsOffers });
-
-    const order = await Order.create({
-      customerId: customer.id,
-      products,
-      totalPrice,
-      deliveryAddress: address,
-      transactionId: transactionId || null,
-    });
-
-    res.status(201).json({ message: "Order placed successfully", order });
-  } catch (err) {
-    res.status(500).json({ message: "Failed to place order", error: err.message });
-  }
-};
-
-
-// In your orderController.js
-export const updatePaymentStatus = async (req, res) => {
-  const { id } = req.params;
-  const { paymentStatus } = req.body;
-
-  try {
-    const order = await Order.findByPk(id);
-    if (!order) return res.status(404).json({ message: "Order not found" });
-
-    order.paymentStatus = paymentStatus;
-    await order.save();
-
-    res.status(200).json({ 
-      message: `Payment status updated to '${paymentStatus}'`, 
-      order 
-    });
-  } catch (err) {
-    res.status(500).json({ 
-      message: "Failed to update payment status", 
-      error: err.message 
     });
   }
 };

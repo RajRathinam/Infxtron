@@ -6,7 +6,11 @@ const Product = sequelize.define("Product", {
   packName: { type: DataTypes.STRING, allowNull: false },
   weight: { type: DataTypes.STRING, allowNull: false },
   proteinIntake: { type: DataTypes.STRING, allowNull: true },
-  availableDay: { type: DataTypes.STRING, allowNull: true },
+  availableDay: { 
+    type: DataTypes.ARRAY(DataTypes.STRING), 
+    allowNull: true,
+    defaultValue: [] 
+  },
   availableTime: { type: DataTypes.STRING, allowNull: true },
   singleOrder: { type: DataTypes.INTEGER, allowNull: false },
   weeklySubscription: { type: DataTypes.INTEGER, allowNull: false },

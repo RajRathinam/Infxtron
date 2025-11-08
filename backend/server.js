@@ -58,7 +58,7 @@ sequelize
   .catch((err) => console.error("❌ Database connection failed:", err));
 
 sequelize
-  .sync({ alter: true })
+  .sync({ focus: true })
   .then(async () => {
     console.log("✅ Tables synced successfully");
     await seedAdmin(process.env.ADMIN_EMAIL, process.env.ADMIN_PASSWORD);

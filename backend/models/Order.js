@@ -4,7 +4,7 @@ import Customer from "./Customer.js";
 
 const Order = sequelize.define("Order", {
   products: {
-    type: DataTypes.JSONB, // store product details as JSON
+    type: DataTypes.JSONB,
     allowNull: false,
   },
   totalPrice: {
@@ -15,18 +15,26 @@ const Order = sequelize.define("Order", {
     type: DataTypes.TEXT,
     allowNull: false,
   },
+  deliveryPoint: {
+    type: DataTypes.ENUM("point_a", "point_b", "point_c", "home_delivery"),
+    allowNull: false,
+  },
+  deliveryCharge: {
+    type: DataTypes.INTEGER,
+    defaultValue: 0,
+  },
   status: {
     type: DataTypes.ENUM("order taken", "order shipped", "order delivered"),
     defaultValue: "order taken",
     allowNull: false,
-  }
-  ,  paymentMethod: {
+  },
+  paymentMethod: {
     type: DataTypes.STRING,
-    defaultValue: "cash"
+    defaultValue: "upi"
   },
   paymentStatus: {
     type: DataTypes.STRING,
-    defaultValue: "pending" // pending, initiated, completed, failed, cancelled
+    defaultValue: "pending"
   },
   transactionId: {
     type: DataTypes.STRING,
@@ -34,7 +42,6 @@ const Order = sequelize.define("Order", {
   }
 });
 
-// Relationship: One Customer can have many Orders
 Customer.hasMany(Order, { foreignKey: "customerId" });
 Order.belongsTo(Customer, { foreignKey: "customerId" });
 

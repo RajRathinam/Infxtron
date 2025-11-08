@@ -4,41 +4,28 @@ import {
   getOrders,
   updateOrderStatus,
   deleteOrder,
-  sendOrderEmail,updatePaymentStatus
+  sendOrderEmail,
+  updatePaymentStatus
 } from "../controllers/orderController.js";
 
 const router = express.Router();
 
-// Place an order (no email sending here)
+// Place an order
 router.post("/", placeOrder);
 
 // Get all orders
 router.get("/", getOrders);
 
-// ✅ Update order status by ID
+// Update order status by ID
 router.patch("/:id/status", updateOrderStatus);
 
-// ✅ Delete order by ID
-router.delete("/:id", deleteOrder);
-
-// ✅ Send order email separately
-router.post("/:id/send-email", sendOrderEmail);
-
-// In your orderRoutes.js
+// Update payment status by ID
 router.patch("/:id/payment-status", updatePaymentStatus);
 
+// Send order email separately
+router.post("/:id/send-email", sendOrderEmail);
+
+// Delete order by ID
+router.delete("/:id", deleteOrder);
+
 export default router;
-
-
-
-// Customer places order with UPI payment option
-
-// System generates UPI link with your business number
-
-// Customer makes payment in their UPI app
-
-// You receive payment notification in your UPI app
-
-// You manually verify payment in your admin panel
-
-// Update order status to "payment confirmed"

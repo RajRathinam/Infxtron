@@ -8,6 +8,7 @@ import Products from "./Products";
 export default function Home() {
   const [currentSlide, setCurrentSlide] = useState(0);
   const [todaysSpecial, setTodaysSpecial] = useState([]);
+  const [loading, setLoading] = useState(true);
 
   // Determine current day and time
   const now = new Date();
@@ -16,51 +17,143 @@ export default function Home() {
   const isMorning = hour >= 7 && hour < 9;
   const isEvening = hour >= 16 && hour < 18;
 
+  // Enhanced helper function to parse availableDay field
+  const parseAvailableDay = (availableDay) => {
+    if (!availableDay) return [];
+    
+    // If it's already an array, return it
+    if (Array.isArray(availableDay)) return availableDay;
+    
+    // If it's a string, try to parse it
+    if (typeof availableDay === 'string') {
+      console.log("Raw availableDay string:", availableDay);
+      
+      // Method 1: Handle the specific malformed format: {"Saturday","Sunday","Monday"}
+      if (availableDay.startsWith('{') && availableDay.endsWith('}')) {
+        try {
+          // Remove curly braces and split by commas
+          const withoutBraces = availableDay.slice(1, -1);
+          // Remove quotes and trim each day
+          const days = withoutBraces.split(',').map(day => 
+            day.replace(/"/g, '').trim()
+          ).filter(day => day);
+          console.log("Parsed days (method 1):", days);
+          return days;
+        } catch (error) {
+          console.error('Error parsing with method 1:', error);
+        }
+      }
+      
+      // Method 2: Try JSON.parse for properly formatted arrays
+      try {
+        const parsed = JSON.parse(availableDay);
+        if (Array.isArray(parsed)) {
+          console.log("Parsed days (method 2 - JSON):", parsed);
+          return parsed;
+        }
+      } catch (error) {
+        console.log('JSON parse failed, trying other methods');
+      }
+      
+      // Method 3: Simple comma splitting as fallback
+      try {
+        const days = availableDay.split(',').map(day => 
+          day.replace(/[{"}]/g, '').trim()
+        ).filter(day => day);
+        console.log("Parsed days (method 3 - split):", days);
+        return days;
+      } catch (error) {
+        console.error('Error parsing with method 3:', error);
+      }
+    }
+    
+    console.log("No days parsed, returning empty array");
+    return [];
+  };
+
   // Fetch today's special products from backend
   useEffect(() => {
-    fetch(`${import.meta.env.VITE_API_BASE_URL}/api/products`)
-      .then((res) => res.json())
-      .then((data) => {
-        // Filter by today's day
-        let availableProducts = data.filter(
-          (product) =>
-            product.availableDay &&
-            product.availableDay.trim().toLowerCase() === today.toLowerCase()
-        );
+    const fetchTodaysSpecials = async () => {
+      try {
+        setLoading(true);
+        const res = await fetch(`${import.meta.env.VITE_API_BASE_URL}/api/products`);
+        const data = await res.json();
 
-        // Filter by time slot
-        availableProducts = availableProducts.filter((product) => {
-          if (!product.availableTime) return false;
-          const time = product.availableTime.toLowerCase();
-          if (isMorning) return time.includes("morning");
-          if (isEvening) return time.includes("evening");
-          return true; // fallback to all times if not morning/evening
+        console.log("=== DEBUG INFO ===");
+        console.log("Today is:", today);
+        console.log("All products:", data);
+
+        // Filter products that have today in their availableDay array
+        let availableProducts = data.filter((product) => {
+          const availableDays = parseAvailableDay(product.availableDay);
+          console.log(`Product: ${product.productName}`);
+          console.log(`Raw availableDay: ${product.availableDay}`);
+          console.log(`Parsed days:`, availableDays);
+          
+          // Check if today is in the availableDay array (case insensitive)
+          const isAvailableToday = availableDays.some(
+            day => day.trim().toLowerCase() === today.toLowerCase()
+          );
+          
+          console.log(`Available today? ${isAvailableToday}`);
+          console.log('---');
+          
+          return isAvailableToday;
         });
+
+        console.log("Available products after day filter:", availableProducts);
+
+        // Filter by time slot if needed
+        if (isMorning || isEvening) {
+          availableProducts = availableProducts.filter((product) => {
+            if (!product.availableTime) return false;
+            const time = product.availableTime.toLowerCase();
+            if (isMorning) return time.includes("morning");
+            if (isEvening) return time.includes("evening");
+            return true;
+          });
+          console.log("Available products after time filter:", availableProducts);
+        }
+
+        console.log("Final available products:", availableProducts);
 
         // Take only top 4 for the slider
         setTodaysSpecial(availableProducts.slice(0, 4));
-      })
-      .catch((err) => console.error("Failed to fetch today's specials:", err));
+      } catch (err) {
+        console.error("Failed to fetch today's specials:", err);
+        setTodaysSpecial([]);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchTodaysSpecials();
   }, [today, isMorning, isEvening]);
 
   // Prepare carousel images
-  const carouselImages = todaysSpecial.length
+  const carouselImages = todaysSpecial.length > 0 
     ? todaysSpecial.map((product) => ({
         src: product.imagePath,
         title: product.productName,
         subtitle: `${product.packName || "Meal Pack"} • ${product.weight || "100g"} • ${product.proteinIntake || "8g"} Protein`,
         product,
+        isFallback: false,
       }))
-    : [];
+    : [{
+        src: "/poster.jpg",
+        title: "Delicious Healthy Meals",
+        subtitle: "Fresh organic meals prepared daily • Check back for today's specials",
+        isFallback: true,
+      }];
 
-  // Auto-slide functionality
+  // Auto-slide functionality (only for actual products, not for fallback)
   useEffect(() => {
-    if (carouselImages.length === 0) return;
+    if (carouselImages.length === 0 || carouselImages[0].isFallback) return;
     const interval = setInterval(() => {
       setCurrentSlide((prev) => (prev + 1) % carouselImages.length);
     }, 4000);
     return () => clearInterval(interval);
-  }, [carouselImages.length]);
+  }, [carouselImages.length, carouselImages[0]?.isFallback]);
 
   const nextSlide = () =>
     setCurrentSlide((prev) => (prev + 1) % carouselImages.length);
@@ -122,10 +215,15 @@ export default function Home() {
             >
               Discover our range of organic, fresh, and nutritious meals delivered daily to your doorstep.
             </motion.p>
+      
           </div>
 
           {/* Carousel Container */}
-          {carouselImages.length > 0 ? (
+          {loading ? (
+            <div className="w-full h-[280px] sm:h-[400px] md:h-[500px] rounded-[2rem] bg-gray-200 animate-pulse flex items-center justify-center">
+              <p className="text-gray-500">Loading today's specials...</p>
+            </div>
+          ) : (
             <div className="relative w-full mb-8 md:mb-12">
               <div className="absolute -inset-2 rounded-[2rem] blur-2xl opacity-40 animate-pulse"></div>
               <motion.div
@@ -150,10 +248,15 @@ export default function Home() {
                         className="w-full h-full object-cover"
                       />
                       <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-black/20 to-transparent"></div>
-                      <div className="absolute top-6 left-6 bg-gradient-to-r from-emerald-500 to-teal-500 text-white px-4 py-1.5 rounded-full  flex items-center gap-1.5 backdrop-blur-sm border border-white/20">
-                        <Star size={12} className="fill-white" />
-                        <span className="text-xs font-bold">Today's Special</span>
-                      </div>
+                      
+                      {/* Today's Special Badge - Only show for actual products */}
+                      {!carouselImages[currentSlide].isFallback && (
+                        <div className="absolute top-6 left-6 bg-gradient-to-r from-emerald-500 to-teal-500 text-white px-4 py-1.5 rounded-full flex items-center gap-1.5 backdrop-blur-sm border border-white/20">
+                          <Star size={12} className="fill-white" />
+                          <span className="text-xs font-bold">Today's Special</span>
+                        </div>
+                      )}
+                      
                       <div className="absolute bottom-0 left-0 right-0 p-6 text-white">
                         <h3 className="text-xl font-black mb-1">
                           {carouselImages[currentSlide].title}
@@ -161,48 +264,55 @@ export default function Home() {
                         <p className="text-sm font-medium opacity-90 mb-2">
                           {carouselImages[currentSlide].subtitle}
                         </p>
+                        {carouselImages[currentSlide].isFallback && (
+                          <p className="text-xs opacity-75">
+                            No specials available today. Check our full menu below!
+                          </p>
+                        )}
                       </div>
                     </div>
                   </motion.div>
                 </AnimatePresence>
 
-                {/* Navigation Buttons */}
-                <button
-                  onClick={prevSlide}
-                  className="absolute left-4 top-1/2 -translate-y-1/2 bg-white/90 backdrop-blur-sm rounded-full p-2 shadow-lg hover:bg-white transition-all active:scale-95 z-10"
-                  aria-label="Previous slide"
-                >
-                  <ChevronLeft size={20} className="text-gray-800" />
-                </button>
-                <button
-                  onClick={nextSlide}
-                  className="absolute right-4 top-1/2 -translate-y-1/2 bg-white/90 backdrop-blur-sm rounded-full p-2 shadow-lg hover:bg-white transition-all active:scale-95 z-10"
-                  aria-label="Next slide"
-                >
-                  <ChevronRight size={20} className="text-gray-800" />
-                </button>
-
-                {/* Dots Indicator */}
-                <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex gap-2 z-10">
-                  {carouselImages.map((_, index) => (
+                {/* Navigation Buttons - Only show if there are multiple slides */}
+                {carouselImages.length > 1 && (
+                  <>
                     <button
-                      key={index}
-                      onClick={() => setCurrentSlide(index)}
-                      className={`w-2 h-2 rounded-full transition-all ${
-                        index === currentSlide
-                          ? "bg-white w-8"
-                          : "bg-white/50 hover:bg-white/75"
-                      }`}
-                      aria-label={`Go to slide ${index + 1}`}
-                    />
-                  ))}
-                </div>
+                      onClick={prevSlide}
+                      className="absolute left-4 top-1/2 -translate-y-1/2 bg-white/90 backdrop-blur-sm rounded-full p-2 shadow-lg hover:bg-white transition-all active:scale-95 z-10"
+                      aria-label="Previous slide"
+                    >
+                      <ChevronLeft size={20} className="text-gray-800" />
+                    </button>
+                    <button
+                      onClick={nextSlide}
+                      className="absolute right-4 top-1/2 -translate-y-1/2 bg-white/90 backdrop-blur-sm rounded-full p-2 shadow-lg hover:bg-white transition-all active:scale-95 z-10"
+                      aria-label="Next slide"
+                    >
+                      <ChevronRight size={20} className="text-gray-800" />
+                    </button>
+                  </>
+                )}
+
+                {/* Dots Indicator - Only show if there are multiple slides */}
+                {carouselImages.length > 1 && (
+                  <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex gap-2 z-10">
+                    {carouselImages.map((_, index) => (
+                      <button
+                        key={index}
+                        onClick={() => setCurrentSlide(index)}
+                        className={`w-2 h-2 rounded-full transition-all ${
+                          index === currentSlide
+                            ? "bg-white w-8"
+                            : "bg-white/50 hover:bg-white/75"
+                        }`}
+                        aria-label={`Go to slide ${index + 1}`}
+                      />
+                    ))}
+                  </div>
+                )}
               </motion.div>
             </div>
-          ) : (
-            <p className="text-center text-gray-500 mt-8">
-              no products available for today.
-            </p>
           )}
 
           {/* Feature Cards */}

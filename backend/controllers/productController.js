@@ -11,6 +11,28 @@ const safeParseJSON = (value) => {
   }
 };
 
+// Helper function to extract public_id from Cloudinary URL
+const getPublicIdFromUrl = (url) => {
+  if (!url) return null;
+  try {
+    const urlParts = url.split('/');
+    const uploadIndex = urlParts.indexOf('upload');
+    if (uploadIndex === -1) return null;
+    
+    // Get the part after upload/ and remove file extension
+    const pathWithVersion = urlParts.slice(uploadIndex + 1).join('/');
+    const publicId = pathWithVersion.split('.')[0];
+    
+    // Remove version number if present (v1234567890/)
+    const finalPublicId = publicId.replace(/^v\d+\//, '');
+    
+    return finalPublicId;
+  } catch (error) {
+    console.error('Error extracting public_id from URL:', error);
+    return null;
+  }
+};
+
 export const createProduct = async (req, res) => {
   try {
     const {
@@ -47,7 +69,7 @@ export const createProduct = async (req, res) => {
       packName,
       weight,
       proteinIntake,
-      availableDay,
+      availableDay: safeParseJSON(availableDay) || [],
       availableTime,
       singleOrder: parseInt(singleOrder),
       weeklySubscription: parseInt(weeklySubscription),
@@ -103,7 +125,22 @@ export const updateProduct = async (req, res) => {
       description,
     } = req.body;
 
+    // Delete old image from Cloudinary if new image is uploaded
     if (req.file && req.file.buffer) {
+      // Delete old image if exists
+      if (product.imagePath) {
+        const oldPublicId = getPublicIdFromUrl(product.imagePath);
+        if (oldPublicId) {
+          try {
+            await cloudinary.uploader.destroy(oldPublicId);
+          } catch (cloudinaryError) {
+            console.error('Error deleting old image from Cloudinary:', cloudinaryError);
+            // Continue with upload even if deletion fails
+          }
+        }
+      }
+
+      // Upload new image
       const bufferStream = new stream.PassThrough();
       bufferStream.end(req.file.buffer);
       const uploadResult = await new Promise((resolve, reject) => {
@@ -115,11 +152,13 @@ export const updateProduct = async (req, res) => {
       });
       product.imagePath = uploadResult.secure_url;
     }
+
+    // Update product fields
     if (productName) product.productName = productName;
     if (packName) product.packName = packName;
     if (weight) product.weight = weight;
     if (proteinIntake) product.proteinIntake = proteinIntake;
-    if (availableDay) product.availableDay = availableDay;
+    if (availableDay) product.availableDay = safeParseJSON(availableDay) || [];
     if (availableTime) product.availableTime = availableTime;
     if (singleOrder) product.singleOrder = parseInt(singleOrder);
     if (weeklySubscription) product.weeklySubscription = parseInt(weeklySubscription);
@@ -135,14 +174,6 @@ export const updateProduct = async (req, res) => {
   }
 };
 
-const getPublicIdFromUrl = (url) => {
-  if (!url) return null;
-  const parts = url.split("/upload/")[1]; // get everything after 'upload/'
-  if (!parts) return null;
-  const publicIdWithExt = parts.split(".")[0]; // remove file extension
-  return publicIdWithExt;
-};
-
 export const deleteProduct = async (req, res) => {
   try {
     const product = await Product.findByPk(req.params.id);
@@ -154,7 +185,13 @@ export const deleteProduct = async (req, res) => {
     if (product.imagePath) {
       const publicId = getPublicIdFromUrl(product.imagePath);
       if (publicId) {
-        await cloudinary.uploader.destroy(publicId);
+        try {
+          await cloudinary.uploader.destroy(publicId);
+          console.log(`Successfully deleted image from Cloudinary: ${publicId}`);
+        } catch (cloudinaryError) {
+          console.error('Error deleting image from Cloudinary:', cloudinaryError);
+          // Continue with product deletion even if image deletion fails
+        }
       }
     }
 

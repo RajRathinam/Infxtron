@@ -16,7 +16,6 @@ router.post("/", upload.single("image"), createProduct);
 // Get all products
 router.get("/", getAllProducts);
 
-
 // Get product by ID
 router.get("/:id", getProductById);
 

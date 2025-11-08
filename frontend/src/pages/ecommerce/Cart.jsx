@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Minus, Plus, Trash2, Smartphone, CreditCard } from "lucide-react";
+import { Minus, Plus, Trash2, MapPin } from "lucide-react";
 import axiosInstance from "../../utils/axiosConfig";
 import Swal from "sweetalert2";
 
@@ -15,13 +15,20 @@ export default function Cart() {
     wantsOffers: false,
   });
   const [placingOrder, setPlacingOrder] = useState(false);
-  const [paymentMethod, setPaymentMethod] = useState("cash"); // "cash" or "upi"
-  const [showUPIInstructions, setShowUPIInstructions] = useState(false);
+  const [selectedDeliveryPoint, setSelectedDeliveryPoint] = useState("");
+  const [deliveryCharge, setDeliveryCharge] = useState(0);
+
+  // Delivery points configuration
+  const DELIVERY_POINTS = [
+    { id: "point_a", name: "Delivery Point A", address: "123 Main Street, City Center", freeDelivery: true },
+    { id: "point_b", name: "Delivery Point B", address: "456 Market Road, Downtown", freeDelivery: true },
+    { id: "point_c", name: "Delivery Point C", address: "789 Park Avenue, Uptown", freeDelivery: true },
+    { id: "home_delivery", name: "Home Delivery", address: "Deliver to my address", freeDelivery: false, charge: 10 }
+  ];
 
   // Get UPI configuration from environment variables
   const UPI_CONFIG = {
-    number: import.meta.env.VITE_BUSINESS_UPI_NUMBER,
-    handler: import.meta.env.VITE_BUSINESS_UPI_HANDLER || 'paytm',
+    number: import.meta.env.VITE_BUSINESS_UPI_NUMBER, // Format: xxxxx@okicici
     name: import.meta.env.VITE_BUSINESS_NAME || "AG's Healthy Food"
   };
 
@@ -51,34 +58,69 @@ export default function Cart() {
     updateCart(updated);
   };
 
-  const total = cartItems.reduce((sum, item) => sum + item.price * item.quantity, 0);
+  const productTotal = cartItems.reduce((sum, item) => sum + item.price * item.quantity, 0);
+  const total = productTotal + deliveryCharge;
 
-  const generateUPIPaymentLink = (amount) => {
-    // Format: upi://pay?pa=UPI_ID&pn=NAME&am=AMOUNT&cu=INR
-    const upiId = `${UPI_CONFIG.number}@${UPI_CONFIG.handler}`;
-    const encodedName = encodeURIComponent(UPI_CONFIG.name);
+  const generateUPIPaymentLink = () => {
     const amountStr = total.toFixed(2);
+    const encodedName = encodeURIComponent(UPI_CONFIG.name);
+    const note = `Order_${Date.now()}`;
     
-    return `upi://pay?pa=${upiId}&pn=${encodedName}&am=${amountStr}&cu=INR`;
+    // Format for UPI: upi://pay?pa=UPI_ID&pn=NAME&am=AMOUNT&cu=INR&tn=NOTE
+    return `upi://pay?pa=${UPI_CONFIG.number}&pn=${encodedName}&am=${amountStr}&cu=INR&tn=${note}`;
   };
 
-  const handleUPIPayment = () => {
-    // Validate UPI configuration
+  const initiateUPIPayment = () => {
     if (!UPI_CONFIG.number) {
       Swal.fire({
         icon: "error",
-        title: "Payment Configuration Error",
-        text: "UPI payment is not configured. Please use cash on delivery.",
+        title: "UPI Not Configured",
+        text: "UPI payment is not available. Please contact support.",
         confirmButtonColor: "#dc2626",
       });
-      return;
+      return false;
     }
 
-    const upiLink = generateUPIPaymentLink(total);
-    window.open(upiLink, '_blank');
-    
-    // Show payment verification modal
-    setShowUPIInstructions(true);
+    try {
+      const upiLink = generateUPIPaymentLink();
+      console.log("Opening UPI Link:", upiLink);
+      
+      // Try to open UPI app directly (works with Google Pay, PhonePe, Paytm, BHIM, etc.)
+      window.location.href = upiLink;
+      
+      return true;
+    } catch (error) {
+      console.error("Error opening UPI:", error);
+      
+      // Fallback: Show UPI ID for manual payment
+      Swal.fire({
+        icon: "info",
+        title: "Manual UPI Payment",
+        html: `
+          <div class="text-left">
+            <p class="text-sm">Please open your UPI app and send payment to:</p>
+            <p class="text-lg font-bold text-green-600 mt-2">${UPI_CONFIG.number}</p>
+            <div class="mt-3 space-y-1 text-sm">
+              <div class="flex justify-between">
+                <span>Amount:</span>
+                <span class="font-bold">₹${total.toFixed(2)}</span>
+              </div>
+              <div class="flex justify-between">
+                <span>Name:</span>
+                <span>${UPI_CONFIG.name}</span>
+              </div>
+            </div>
+          </div>
+        `,
+        confirmButtonText: "I've Paid",
+        showCancelButton: true,
+        cancelButtonText: "Cancel",
+        confirmButtonColor: "#16a34a",
+        cancelButtonColor: "#dc2626",
+      });
+      
+      return true;
+    }
   };
 
   const updatePaymentStatus = async (orderId, status) => {
@@ -91,34 +133,67 @@ export default function Cart() {
     }
   };
 
+  const handleDeliveryPointChange = (pointId) => {
+    setSelectedDeliveryPoint(pointId);
+    const point = DELIVERY_POINTS.find(p => p.id === pointId);
+    setDeliveryCharge(point?.freeDelivery ? 0 : (point?.charge || 0));
+  };
+
   const placeOrder = async () => {
-    if (!customer.name || !customer.phone || !customer.address) {
+    // Validate required fields
+    if (!customer.name || !customer.phone || !selectedDeliveryPoint) {
       await Swal.fire({
         icon: "warning",
         title: "Incomplete Details",
-        text: "Please fill name, phone, and address to place order.",
+        text: "Please fill name, phone, and select delivery point to place order.",
         confirmButtonColor: "#FF9800",
       });
       return;
     }
 
-    // Validate UPI configuration if UPI payment is selected
-    if (paymentMethod === "upi" && !UPI_CONFIG.number) {
+    // Validate phone number
+    if (!/^\d{10}$/.test(customer.phone)) {
       await Swal.fire({
-        icon: "error",
-        title: "Payment Not Available",
-        text: "UPI payment is currently unavailable. Please use cash on delivery.",
-        confirmButtonColor: "#dc2626",
+        icon: "warning",
+        title: "Invalid Phone",
+        text: "Please enter a valid 10-digit phone number.",
+        confirmButtonColor: "#FF9800",
       });
-      setPaymentMethod("cash");
       return;
     }
+
+    // Validate home delivery address
+    if (selectedDeliveryPoint === 'home_delivery' && !customer.address.trim()) {
+      await Swal.fire({
+        icon: "warning",
+        title: "Address Required",
+        text: "Please enter your delivery address for home delivery.",
+        confirmButtonColor: "#FF9800",
+      });
+      return;
+    }
+
+    // Validate UPI configuration
+    if (!UPI_CONFIG.number) {
+      await Swal.fire({
+        icon: "error",
+        title: "Payment Unavailable",
+        text: "Payment is currently unavailable. Please contact support.",
+        confirmButtonColor: "#dc2626",
+      });
+      return;
+    }
+
+    const selectedPoint = DELIVERY_POINTS.find(p => p.id === selectedDeliveryPoint);
+    const finalAddress = selectedPoint.id === 'home_delivery' 
+      ? customer.address 
+      : `${selectedPoint.name}, ${selectedPoint.address}`;
 
     const payload = {
       name: customer.name,
       phone: customer.phone,
       email: customer.email || undefined,
-      address: customer.address,
+      address: finalAddress,
       wantsOffers: customer.wantsOffers,
       products: cartItems.map((ci) => ({
         productId: ci.id || ci._id,
@@ -129,14 +204,17 @@ export default function Cart() {
         packName: ci.packName,
       })),
       totalPrice: Math.round(total),
-      transactionId: `PH_${Date.now()}`,
-      paymentMethod: paymentMethod,
-      paymentStatus: paymentMethod === "cash" ? "pending" : "initiated",
+      deliveryPoint: selectedDeliveryPoint,
+      deliveryCharge: deliveryCharge,
+      transactionId: `TXN_${Date.now()}`,
+      paymentMethod: "upi",
+      paymentStatus: "initiated",
     };
 
     setPlacingOrder(true);
     
     try {
+      // First, place the order
       const orderRes = await axiosInstance.post("/api/orders", payload, {
         withCredentials: true,
       });
@@ -145,110 +223,153 @@ export default function Cart() {
         throw new Error("Order placement failed");
       }
 
-      const orderId = orderRes.data.order.id;
-      console.log("Order placed successfully, ID:", orderId, "Payload:", payload);
+      const orderId = orderRes.data.order?.id || orderRes.data.id;
+      console.log("Order placed successfully, ID:", orderId);
 
-      if (paymentMethod === "upi") {
-        // Open UPI payment
-        handleUPIPayment();
-        
-        await Swal.fire({
-          icon: "info",
-          title: "Complete UPI Payment",
-          html: `
-            <div class="text-left">
-              <p>✅ Order placed successfully!</p>
-              <p class="mt-2">Please complete the UPI payment to confirm your order.</p>
-              <p class="text-sm text-gray-600 mt-2">Order ID: <strong>${orderId}</strong></p>
-              <p class="text-xs text-blue-600 mt-2">UPI ID: <strong>${UPI_CONFIG.number}@${UPI_CONFIG.handler}</strong></p>
+      // Show payment confirmation
+      const paymentConfirmed = await Swal.fire({
+        icon: "info",
+        title: "Proceed to Payment",
+        html: `
+          <div class="text-left">
+            <p class="font-semibold">Order Summary:</p>
+            <div class="mt-2 space-y-1 text-sm">
+              <div class="flex justify-between">
+                <span>Products:</span>
+                <span>₹${productTotal.toFixed(2)}</span>
+              </div>
+              ${deliveryCharge > 0 ? `
+                <div class="flex justify-between">
+                  <span>Delivery Charge:</span>
+                  <span>₹${deliveryCharge.toFixed(2)}</span>
+                </div>
+              ` : ''}
+              <div class="flex justify-between border-t border-gray-300 pt-1 font-bold">
+                <span>Total Amount:</span>
+                <span class="text-orange-600">₹${total.toFixed(2)}</span>
+              </div>
             </div>
-          `,
-          confirmButtonText: "I've Paid",
-          showCancelButton: true,
-          cancelButtonText: "Cancel Order",
-          confirmButtonColor: "#16a34a",
-          cancelButtonColor: "#dc2626",
-        }).then((result) => {
-          if (result.isConfirmed) {
-            // Mark as paid (manual verification)
-            updatePaymentStatus(orderId, "completed");
+            <p class="mt-3 text-sm">Click "Pay Now" to complete payment via UPI.</p>
+          </div>
+        `,
+        showCancelButton: true,
+        confirmButtonText: "Pay Now",
+        cancelButtonText: "Cancel Order",
+        confirmButtonColor: "#16a34a",
+        cancelButtonColor: "#dc2626",
+      });
+
+      if (paymentConfirmed.isConfirmed) {
+        // Initiate UPI payment
+        const paymentInitiated = initiateUPIPayment();
+        
+        if (!paymentInitiated) {
+          await Swal.fire({
+            icon: "error",
+            title: "Payment Failed",
+            text: "Could not process payment. Please try again.",
+            confirmButtonColor: "#dc2626",
+          });
+          return;
+        }
+
+        // Wait a moment for UPI app to open, then ask for confirmation
+        setTimeout(async () => {
+          const paymentResult = await Swal.fire({
+            icon: "question",
+            title: "Payment Confirmation",
+            html: `
+              <div class="text-left">
+                <p class="text-sm">Did you complete the payment of <strong>₹${total.toFixed(2)}</strong>?</p>
+                <div class="mt-2 p-2 bg-gray-50 rounded text-xs">
+                  <p><strong>UPI ID:</strong> ${UPI_CONFIG.number}</p>
+                  <p><strong>Order ID:</strong> ${orderId}</p>
+                </div>
+                <p class="text-xs text-gray-500 mt-2">Please check your UPI app for payment confirmation.</p>
+              </div>
+            `,
+            showCancelButton: true,
+            confirmButtonText: "Yes, Payment Done",
+            cancelButtonText: "Payment Failed",
+            confirmButtonColor: "#16a34a",
+            cancelButtonColor: "#dc2626",
+            allowOutsideClick: false,
+          });
+
+          if (paymentResult.isConfirmed) {
+            // Mark payment as completed
+            await updatePaymentStatus(orderId, "completed");
             
-            Swal.fire({
+            await Swal.fire({
               icon: "success",
-              title: "Payment Confirmed!",
-              text: "Thank you for your payment. Your order is now confirmed.",
+              title: "Order Confirmed! 🎉",
+              html: `
+                <div class="text-left">
+                  <p>Thank you for your payment!</p>
+                  <p class="text-sm text-gray-600 mt-2">Your order has been confirmed and will be delivered soon.</p>
+                  <div class="mt-3 p-3 bg-green-50 rounded border border-green-200">
+                    <p class="text-xs font-semibold text-green-800">Order Details:</p>
+                    <p class="text-xs mt-1"><strong>Order ID:</strong> ${orderId}</p>
+                    <p class="text-xs"><strong>Delivery:</strong> ${selectedPoint.name}</p>
+                    <p class="text-xs"><strong>Total Paid:</strong> ₹${total.toFixed(2)}</p>
+                  </div>
+                </div>
+              `,
               confirmButtonColor: "#16a34a",
-              timer: 3000,
+              timer: 8000,
             });
+
+            // Clear cart and reset form
+            sessionStorage.removeItem("cartItems");
+            setCartItems([]);
+            setShowPayment(false);
+            setCustomer({
+              name: "",
+              phone: "",
+              email: "",
+              address: "",
+              wantsOffers: false,
+            });
+            setSelectedDeliveryPoint("");
+            setDeliveryCharge(0);
+
           } else {
-            // Mark as cancelled
-            updatePaymentStatus(orderId, "cancelled");
+            // Mark payment as failed
+            await updatePaymentStatus(orderId, "failed");
             
-            Swal.fire({
+            await Swal.fire({
               icon: "info",
-              title: "Order Cancelled",
-              text: "Your order has been cancelled.",
+              title: "Payment Not Completed",
+              html: `
+                <div class="text-left">
+                  <p>Your order is placed but payment is pending.</p>
+                  <p class="text-sm text-gray-600 mt-2">Please complete the payment to confirm your order.</p>
+                  <p class="text-xs text-gray-500 mt-2">Order ID: <strong>${orderId}</strong></p>
+                </div>
+              `,
               confirmButtonColor: "#6b7280",
             });
           }
-        });
+        }, 2000);
 
       } else {
-        // Cash on delivery - send email
-        try {
-          const emailResponse = await axiosInstance.post(
-            `/api/orders/${orderId}/send-email`, 
-            {},
-            { withCredentials: true }
-          );
-          
-          console.log("Email sent successfully:", emailResponse.data);
-          
-          await Swal.fire({
-            icon: "success",
-            title: "Order Placed Successfully!",
-            text: "Your order has been placed successfully. Pay when delivered.",
-            confirmButtonColor: "#25D366",
-          });
-
-        } catch (emailErr) {
-          console.error("Email sending failed:", {
-            status: emailErr.response?.status,
-            data: emailErr.response?.data,
-            message: emailErr.message
-          });
-
-          await Swal.fire({
-            icon: "warning",
-            title: "Order Placed!",
-            html: `
-              <div>
-                <p>Your order has been placed successfully! 🎉</p>
-                <p class="text-sm text-gray-600 mt-2">Pay when delivered.</p>
-              </div>
-            `,
-            confirmButtonColor: "#FF9800",
-          });
-        }
+        // Cancel order
+        await updatePaymentStatus(orderId, "cancelled");
+        await Swal.fire({
+          icon: "info",
+          title: "Order Cancelled",
+          text: "Your order has been cancelled.",
+          confirmButtonColor: "#6b7280",
+        });
       }
 
-      // Clear cart regardless of email status
-      sessionStorage.removeItem("cartItems");
-      setCartItems([]);
-
     } catch (err) {
-      console.error("Order placement failed:", {
-        status: err.response?.status,
-        data: err.response?.data,
-        message: err.message
-      });
+      console.error("Order placement failed:", err);
 
       let errorMessage = "Failed to place order. Please try again.";
       
       if (err.response?.data?.message) {
         errorMessage = err.response.data.message;
-      } else if (err.message) {
-        errorMessage = err.message;
       }
 
       await Swal.fire({
@@ -352,9 +473,22 @@ export default function Cart() {
               </AnimatePresence>
             </div>
 
-            <div className="mt-8 pt-4 flex items-center justify-between text-gray-800">
-              <h2 className="text-sm md:text-lg font-semibold">Total</h2>
-              <span className="text-lg md:text-2xl font-bold text-orange-600">₹{total.toFixed(2)}</span>
+            {/* Order Summary */}
+            <div className="mt-6 space-y-2 border-t border-gray-300 pt-4">
+              <div className="flex justify-between text-sm">
+                <span>Products Total:</span>
+                <span>₹{productTotal.toFixed(2)}</span>
+              </div>
+              {deliveryCharge > 0 && (
+                <div className="flex justify-between text-sm">
+                  <span>Delivery Charge:</span>
+                  <span>₹{deliveryCharge.toFixed(2)}</span>
+                </div>
+              )}
+              <div className="flex justify-between text-lg font-bold border-t border-gray-300 pt-2">
+                <span>Total Amount:</span>
+                <span className="text-orange-600">₹{total.toFixed(2)}</span>
+              </div>
             </div>
 
             <AnimatePresence>
@@ -370,27 +504,24 @@ export default function Cart() {
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs md:text-sm text-gray-700">
                     <input
                       className="border border-gray-300 rounded px-3 py-2 placeholder-gray-400 focus:ring-2 focus:ring-orange-400"
-                      placeholder="Name"
+                      placeholder="Full Name *"
                       value={customer.name}
                       onChange={(e) => setCustomer({ ...customer, name: e.target.value })}
+                      required
                     />
                     <input
                       className="border border-gray-300 rounded px-3 py-2 placeholder-gray-400 focus:ring-2 focus:ring-orange-400"
-                      placeholder="Phone (10 digits)"
+                      placeholder="Phone Number (10 digits) *"
                       value={customer.phone}
-                      onChange={(e) => setCustomer({ ...customer, phone: e.target.value })}
+                      onChange={(e) => setCustomer({ ...customer, phone: e.target.value.replace(/\D/g, '') })}
+                      maxLength={10}
+                      required
                     />
                     <input
                       className="border border-gray-300 rounded px-3 py-2 placeholder-gray-400 focus:ring-2 focus:ring-orange-400"
                       placeholder="Email (optional)"
                       value={customer.email}
                       onChange={(e) => setCustomer({ ...customer, email: e.target.value })}
-                    />
-                    <input
-                      className="border border-gray-300 rounded px-3 py-2 md:col-span-2 placeholder-gray-400 focus:ring-2 focus:ring-orange-400"
-                      placeholder="Delivery Address"
-                      value={customer.address}
-                      onChange={(e) => setCustomer({ ...customer, address: e.target.value })}
                     />
                     <label className="flex items-center gap-2 text-xs md:col-span-2 text-gray-600">
                       <input
@@ -402,62 +533,75 @@ export default function Cart() {
                     </label>
                   </div>
 
-                  {/* Payment Method Selection */}
+                  {/* Delivery Points Selection */}
                   <div className="border-t pt-4">
-                    <h3 className="text-sm font-semibold text-gray-800 mb-3">Select Payment Method</h3>
-                    <div className="grid grid-cols-2 gap-3">
-                      <label className={`border-2 rounded-lg p-3 cursor-pointer transition-all ${
-                        paymentMethod === "cash" 
-                          ? "border-green-500 bg-green-50" 
-                          : "border-gray-300 hover:border-gray-400"
-                      }`}>
-                        <input
-                          type="radio"
-                          name="paymentMethod"
-                          value="cash"
-                          checked={paymentMethod === "cash"}
-                          onChange={(e) => setPaymentMethod(e.target.value)}
-                          className="hidden"
-                        />
-                        <div className="text-center">
-                          <CreditCard className="mx-auto text-green-600 mb-1" size={20} />
-                          <div className="text-xs font-medium mt-1">Cash on Delivery</div>
-                          <div className="text-xs text-gray-500">Pay when delivered</div>
-                        </div>
-                      </label>
-
-                      <label className={`border-2 rounded-lg p-3 cursor-pointer transition-all ${
-                        paymentMethod === "upi" 
-                          ? "border-blue-500 bg-blue-50" 
-                          : "border-gray-300 hover:border-gray-400"
-                      }`}>
-                        <input
-                          type="radio"
-                          name="paymentMethod"
-                          value="upi"
-                          checked={paymentMethod === "upi"}
-                          onChange={(e) => setPaymentMethod(e.target.value)}
-                          className="hidden"
-                        />
-                        <div className="text-center">
-                          <Smartphone className="mx-auto text-blue-600 mb-1" size={20} />
-                          <div className="text-xs font-medium mt-1">UPI Payment</div>
-                          <div className="text-xs text-gray-500">Pay now with UPI</div>
-                        </div>
-                      </label>
+                    <h3 className="text-sm font-semibold text-gray-800 mb-3 flex items-center gap-2">
+                      <MapPin size={16} />
+                      Select Delivery Point *
+                    </h3>
+                    <div className="grid grid-cols-1 gap-3">
+                      {DELIVERY_POINTS.map((point) => (
+                        <label
+                          key={point.id}
+                          className={`border-2 rounded-lg p-3 cursor-pointer transition-all ${
+                            selectedDeliveryPoint === point.id
+                              ? "border-green-500 bg-green-50"
+                              : "border-gray-300 hover:border-gray-400"
+                          }`}
+                        >
+                          <input
+                            type="radio"
+                            name="deliveryPoint"
+                            value={point.id}
+                            checked={selectedDeliveryPoint === point.id}
+                            onChange={(e) => handleDeliveryPointChange(e.target.value)}
+                            className="hidden"
+                          />
+                          <div className="flex justify-between items-start">
+                            <div>
+                              <div className="font-medium text-sm">{point.name}</div>
+                              <div className="text-xs text-gray-500 mt-1">{point.address}</div>
+                            </div>
+                            <div className="text-right">
+                              {point.freeDelivery ? (
+                                <span className="text-green-600 text-xs font-bold">FREE</span>
+                              ) : (
+                                <span className="text-orange-600 text-xs font-bold">₹{point.charge}</span>
+                              )}
+                            </div>
+                          </div>
+                        </label>
+                      ))}
                     </div>
 
-                    {paymentMethod === "upi" && (
-                      <div className="mt-3 p-3 bg-blue-50 border border-blue-200 rounded-lg">
-                        <p className="text-xs text-blue-800">
-                          {UPI_CONFIG.number ? (
-                            <>💡 You'll be redirected to your UPI app to complete payment.</>
-                          ) : (
-                            <>⚠️ UPI payment is currently unavailable. Please use cash on delivery.</>
-                          )}
-                        </p>
+                    {/* Home Delivery Address (if selected) */}
+                    {selectedDeliveryPoint === 'home_delivery' && (
+                      <div className="mt-3">
+                        <textarea
+                          className="w-full border border-gray-300 rounded px-3 py-2 placeholder-gray-400 focus:ring-2 focus:ring-orange-400 text-sm"
+                          placeholder="Enter your complete delivery address with landmark *"
+                          rows={3}
+                          value={customer.address}
+                          onChange={(e) => setCustomer({ ...customer, address: e.target.value })}
+                          required
+                        />
                       </div>
                     )}
+                  </div>
+
+                  {/* Payment Information */}
+                  <div className="border-t pt-4">
+                    <h3 className="text-sm font-semibold text-gray-800 mb-2">Payment Method</h3>
+                    <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                      <p className="text-xs text-blue-800">
+                        Payment will be processed via UPI. You'll be redirected to your UPI app (Google Pay, PhonePe, Paytm, etc.) to complete the payment.
+                      </p>
+                      {UPI_CONFIG.number && (
+                        <p className="text-xs text-gray-600 mt-1">
+                          UPI ID: <strong>{UPI_CONFIG.number}</strong>
+                        </p>
+                      )}
+                    </div>
                   </div>
                 </motion.div>
               )}
@@ -472,30 +616,26 @@ export default function Cart() {
                   whileHover={{ scale: 1.03 }}
                   className="bg-orange-500 hover:bg-orange-600 text-white px-8 py-2.5 text-sm md:text-base rounded-lg font-semibold shadow-md transition-all duration-300"
                 >
-                  Place Order
+                  Proceed to Payment
                 </motion.button>
               ) : (
                 <motion.button
                   onClick={placeOrder}
-                  disabled={placingOrder || (paymentMethod === "upi" && !UPI_CONFIG.number)}
+                  disabled={placingOrder || !UPI_CONFIG.number}
                   initial={{ opacity: 0, y: 20 }}
                   animate={{ opacity: 1, y: 0 }}
-                  whileHover={{ scale: (placingOrder || (paymentMethod === "upi" && !UPI_CONFIG.number)) ? 1 : 1.05 }}
+                  whileHover={{ scale: placingOrder ? 1 : 1.05 }}
                   className={`px-8 py-2.5 text-sm md:text-base rounded-lg font-semibold shadow-md transition-all duration-300 ${
-                    placingOrder || (paymentMethod === "upi" && !UPI_CONFIG.number)
+                    placingOrder || !UPI_CONFIG.number
                       ? "bg-gray-400 cursor-not-allowed text-white" 
-                      : paymentMethod === "upi" 
-                        ? "bg-green-500 hover:bg-green-600 text-white"
-                        : "bg-orange-500 hover:bg-orange-600 text-white"
+                      : "bg-green-500 hover:bg-green-600 text-white"
                   }`}
                 >
                   {placingOrder 
-                    ? "Placing Order..." 
-                    : paymentMethod === "upi" && !UPI_CONFIG.number
-                      ? "UPI Unavailable"
-                      : paymentMethod === "upi" 
-                        ? "Pay with UPI" 
-                        : "Place Order (Cash)"
+                    ? "Processing..." 
+                    : !UPI_CONFIG.number
+                      ? "Payment Unavailable"
+                      : `Pay ₹${total.toFixed(2)} via UPI`
                   }
                 </motion.button>
               )}
@@ -503,69 +643,6 @@ export default function Cart() {
           </>
         )}
       </div>
-
-      {/* UPI Instructions Modal */}
-      <AnimatePresence>
-        {showUPIInstructions && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
-          >
-            <motion.div
-              initial={{ scale: 0.9, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0.9, opacity: 0 }}
-              className="bg-white rounded-xl p-6 max-w-md w-full"
-            >
-              <h3 className="text-lg font-bold text-gray-800 mb-4">UPI Payment Instructions</h3>
-              
-              <div className="space-y-3 text-sm text-gray-600">
-                <div className="flex items-start gap-3">
-                  <span className="bg-blue-100 text-blue-600 rounded-full w-6 h-6 flex items-center justify-center text-xs font-bold flex-shrink-0">1</span>
-                  <p>Open your UPI app (PhonePe, Google Pay, Paytm, etc.)</p>
-                </div>
-                
-                <div className="flex items-start gap-3">
-                  <span className="bg-blue-100 text-blue-600 rounded-full w-6 h-6 flex items-center justify-center text-xs font-bold flex-shrink-0">2</span>
-                  <p>Send payment to: <strong className="text-green-600">{UPI_CONFIG.number}@{UPI_CONFIG.handler}</strong></p>
-                </div>
-                
-                <div className="flex items-start gap-3">
-                  <span className="bg-blue-100 text-blue-600 rounded-full w-6 h-6 flex items-center justify-center text-xs font-bold flex-shrink-0">3</span>
-                  <p>Amount: <strong className="text-orange-600">₹{total.toFixed(2)}</strong></p>
-                </div>
-                
-                <div className="flex items-start gap-3">
-                  <span className="bg-blue-100 text-blue-600 rounded-full w-6 h-6 flex items-center justify-center text-xs font-bold flex-shrink-0">4</span>
-                  <p>Add note: <strong>Order #{Date.now()}</strong></p>
-                </div>
-              </div>
-
-              <div className="mt-6 flex gap-3">
-                <button
-                  onClick={() => setShowUPIInstructions(false)}
-                  className="flex-1 bg-gray-500 text-white py-2 rounded-lg hover:bg-gray-600 transition"
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={() => {
-                    setShowUPIInstructions(false);
-                    // Reopen UPI link
-                    const upiLink = generateUPIPaymentLink(total);
-                    window.open(upiLink, '_blank');
-                  }}
-                  className="flex-1 bg-green-500 text-white py-2 rounded-lg hover:bg-green-600 transition"
-                >
-                  Open UPI App
-                </button>
-              </div>
-            </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
     </div>
   );
 }

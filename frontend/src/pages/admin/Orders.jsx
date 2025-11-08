@@ -15,6 +15,9 @@ import {
   IndianRupee,
   Tag,
   FileText,
+  Truck,
+  Home,
+  Building,
 } from "lucide-react";
 import axiosInstance from "../../utils/axiosConfig";
 import Swal from "sweetalert2";
@@ -25,6 +28,14 @@ const Orders = () => {
   const [loading, setLoading] = useState(false);
   const [updatingStatus, setUpdatingStatus] = useState({});
   const [deleting, setDeleting] = useState({});
+
+  // Delivery points mapping
+  const DELIVERY_POINTS = {
+    point_a: { name: "Delivery Point A", icon: <Building size={14} /> },
+    point_b: { name: "Delivery Point B", icon: <Building size={14} /> },
+    point_c: { name: "Delivery Point C", icon: <Building size={14} /> },
+    home_delivery: { name: "Home Delivery", icon: <Home size={14} /> }
+  };
 
   // ✅ Load all orders
   const loadOrders = async () => {
@@ -129,17 +140,27 @@ const Orders = () => {
   // Get payment status color
   const getPaymentStatusColor = (status) => {
     switch (status) {
-      case 'completed': return 'bg-green-100 text-green-800';
-      case 'initiated': return 'bg-blue-100 text-blue-800';
-      case 'failed': return 'bg-red-100 text-red-800';
-      case 'cancelled': return 'bg-gray-100 text-gray-800';
-      default: return 'bg-yellow-100 text-yellow-800'; // pending
+      case 'completed': return 'bg-green-100 text-green-800 border border-green-200';
+      case 'initiated': return 'bg-blue-100 text-blue-800 border border-blue-200';
+      case 'failed': return 'bg-red-100 text-red-800 border border-red-200';
+      case 'cancelled': return 'bg-gray-100 text-gray-800 border border-gray-200';
+      default: return 'bg-yellow-100 text-yellow-800 border border-yellow-200'; // pending
     }
   };
 
   // Get payment method icon
   const getPaymentMethodIcon = (method) => {
-    return method === 'upi' ? <Smartphone size={16} /> : <CreditCard size={16} />;
+    return method === 'upi' ? <Smartphone size={14} /> : <CreditCard size={14} />;
+  };
+
+  // Get order status color
+  const getOrderStatusColor = (status) => {
+    switch (status) {
+      case 'order delivered': return 'bg-green-600 text-white';
+      case 'order shipped': return 'bg-blue-500 text-white';
+      case 'order taken': return 'bg-yellow-400 text-white';
+      default: return 'bg-gray-400 text-white';
+    }
   };
 
   return (
@@ -150,10 +171,22 @@ const Orders = () => {
           <h1 className="text-2xl font-semibold text-gray-800">Orders</h1>
           <p className="text-gray-500">Manage all customer orders.</p>
         </div>
+        <div className="text-sm text-gray-600">
+          Total Orders: <span className="font-bold text-green-600">{orders.length}</span>
+        </div>
       </div>
 
       {loading ? (
-        <p className="text-gray-500 text-center mt-10">Loading orders...</p>
+        <div className="flex justify-center items-center py-10">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-green-600"></div>
+          <span className="ml-2 text-gray-500">Loading orders...</span>
+        </div>
+      ) : orders.length === 0 ? (
+        <div className="text-center py-16 bg-gray-50 rounded-lg border-2 border-dashed border-gray-300">
+          <Package className="mx-auto text-gray-400 mb-4" size={48} />
+          <h3 className="text-lg font-semibold text-gray-600 mb-2">No Orders Yet</h3>
+          <p className="text-gray-500">Orders will appear here when customers place them.</p>
+        </div>
       ) : (
         <div className="space-y-5">
           {orders.map((order) => {
@@ -167,6 +200,11 @@ const Orders = () => {
               hour: "2-digit",
               minute: "2-digit",
             });
+
+            const deliveryPoint = DELIVERY_POINTS[order.deliveryPoint] || { 
+              name: order.deliveryPoint, 
+              icon: <MapPin size={14} /> 
+            };
 
             return (
               <motion.div
@@ -200,24 +238,33 @@ const Orders = () => {
                   </div>
 
                   <div className="flex justify-between items-center">
-                    <div className="flex items-center gap-3">
+                    <div className="flex items-center gap-3 flex-wrap">
+                      {/* Order Status */}
                       <span
-                        className={`px-3 py-1 rounded-full text-xs font-medium capitalize ${
-                          order.status === "order delivered"
-                            ? "bg-green-600 text-white"
-                            : order.status === "order shipped"
-                            ? "bg-blue-500 text-white"
-                            : "bg-yellow-400 text-white"
-                        }`}
+                        className={`px-3 py-1 rounded-full text-xs font-medium capitalize ${getOrderStatusColor(order.status)}`}
                       >
-                        {order.status}
+                        {order.status.replace('order ', '')}
                       </span>
                       
-                      {/* Payment Method Badge */}
+                      {/* Payment Status */}
                       <span className={`px-2 py-1 rounded-full text-xs font-medium flex items-center gap-1 ${getPaymentStatusColor(order.paymentStatus)}`}>
                         {getPaymentMethodIcon(order.paymentMethod)}
                         {order.paymentMethod === 'upi' ? 'UPI' : 'Cash'} • {order.paymentStatus}
                       </span>
+
+                      {/* Delivery Point */}
+                      <span className="px-2 py-1 rounded-full text-xs font-medium bg-purple-100 text-purple-800 border border-purple-200 flex items-center gap-1">
+                        {deliveryPoint.icon}
+                        {deliveryPoint.name}
+                      </span>
+
+                      {/* Delivery Charge */}
+                      {order.deliveryCharge > 0 && (
+                        <span className="px-2 py-1 rounded-full text-xs font-medium bg-orange-100 text-orange-800 border border-orange-200 flex items-center gap-1">
+                          <Truck size={12} />
+                          Delivery: ₹{order.deliveryCharge}
+                        </span>
+                      )}
                     </div>
 
                     <button
@@ -225,10 +272,15 @@ const Orders = () => {
                         e.stopPropagation();
                         deleteOrder(order.id);
                       }}
-                      className="text-red-500 hover:text-red-600 transition"
+                      className="text-red-500 hover:text-red-600 transition p-1 rounded hover:bg-red-50"
                       disabled={deleting[order.id]}
+                      title="Delete order"
                     >
-                      <Trash2 size={20} />
+                      {deleting[order.id] ? (
+                        <div className="w-5 h-5 border-2 border-red-500 border-t-transparent rounded-full animate-spin" />
+                      ) : (
+                        <Trash2 size={18} />
+                      )}
                     </button>
                   </div>
                 </div>
@@ -243,7 +295,7 @@ const Orders = () => {
                       className="p-5 space-y-4 border-t border-gray-300 bg-white"
                     >
                       {/* Order & Payment Information */}
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
                         {/* Order Information */}
                         <div className="space-y-3 border border-gray-200 rounded-lg p-4 bg-gray-50">
                           <h3 className="font-semibold text-gray-800 flex items-center gap-2">
@@ -266,7 +318,7 @@ const Orders = () => {
                             {order.transactionId && (
                               <div className="flex justify-between">
                                 <span className="text-gray-600">Transaction ID:</span>
-                                <span className="font-medium text-blue-600">{order.transactionId}</span>
+                                <span className="font-medium text-blue-600 text-xs">{order.transactionId}</span>
                               </div>
                             )}
                           </div>
@@ -301,6 +353,38 @@ const Orders = () => {
                             </div>
                           </div>
                         </div>
+
+                        {/* Delivery Information */}
+                        <div className="space-y-3 border border-gray-200 rounded-lg p-4 bg-gray-50">
+                          <h3 className="font-semibold text-gray-800 flex items-center gap-2">
+                            <Truck size={18} className="text-purple-600" />
+                            Delivery Information
+                          </h3>
+                          <div className="space-y-2 text-sm">
+                            <div className="flex justify-between">
+                              <span className="text-gray-600">Point:</span>
+                              <span className="font-medium flex items-center gap-1">
+                                {deliveryPoint.icon}
+                                {deliveryPoint.name}
+                              </span>
+                            </div>
+                            <div className="flex justify-between">
+                              <span className="text-gray-600">Charge:</span>
+                              <span className={`font-medium flex items-center gap-1 ${
+                                order.deliveryCharge > 0 ? 'text-orange-600' : 'text-green-600'
+                              }`}>
+                                <IndianRupee size={12} />
+                                {order.deliveryCharge > 0 ? order.deliveryCharge : 'FREE'}
+                              </span>
+                            </div>
+                            <div className="flex justify-between">
+                              <span className="text-gray-600">Type:</span>
+                              <span className="font-medium">
+                                {order.deliveryPoint === 'home_delivery' ? 'Home Delivery' : 'Pickup Point'}
+                              </span>
+                            </div>
+                          </div>
+                        </div>
                       </div>
 
                       {/* Customer Information */}
@@ -309,16 +393,16 @@ const Orders = () => {
                           <User className="text-green-600 mt-1" size={22} />
                           <div className="flex-1">
                             <p className="font-semibold text-gray-800 text-base">
-                              {order.Customer.name}
+                              {order.Customer?.name || 'N/A'}
                             </p>
                             <div className="flex flex-col mt-1 text-sm text-green-700 space-y-1">
                               <a
-                                href={`tel:${order.Customer.phone}`}
+                                href={`tel:${order.Customer?.phone}`}
                                 className="flex items-center gap-1 hover:underline"
                               >
-                                <Phone size={14} /> {order.Customer.phone}
+                                <Phone size={14} /> {order.Customer?.phone || 'N/A'}
                               </a>
-                              {order.Customer.email && (
+                              {order.Customer?.email && (
                                 <a
                                   href={`mailto:${order.Customer.email}`}
                                   className="flex items-center gap-1 hover:underline"
@@ -326,19 +410,19 @@ const Orders = () => {
                                   <Mail size={14} /> {order.Customer.email}
                                 </a>
                               )}
-                              {order.Customer.address && (
+                              {order.Customer?.address && (
                                 <div className="flex items-start gap-1 text-gray-600">
                                   <MapPin size={14} className="mt-0.5 flex-shrink-0" />
                                   <span>{order.Customer.address}</span>
                                 </div>
                               )}
-                              {order.Customer.wantsOffers && (
+                              {order.Customer?.wantsOffers && (
                                 <div className="flex items-center gap-1 text-purple-600">
                                   <Tag size={14} />
                                   <span>Wants to receive offers</span>
                                 </div>
                               )}
-                              {order.Customer.message && (
+                              {order.Customer?.message && (
                                 <div className="flex items-start gap-1 text-blue-600">
                                   <FileText size={14} className="mt-0.5 flex-shrink-0" />
                                   <span>Message: "{order.Customer.message}"</span>
@@ -351,7 +435,7 @@ const Orders = () => {
                         <div className="text-sm text-gray-500 space-y-1">
                           <div className="flex items-center gap-1">
                             <Calendar size={14} />
-                            <span>Customer since: {formatDate(order.Customer.createdAt)}</span>
+                            <span>Customer since: {formatDate(order.Customer?.createdAt)}</span>
                           </div>
                         </div>
                       </div>
@@ -384,11 +468,11 @@ const Orders = () => {
                         <div className="flex items-center gap-2 p-3 bg-green-100 border-b border-gray-300">
                           <ShoppingBag className="text-green-700" size={18} />
                           <h3 className="font-semibold text-green-700">
-                            Ordered Products ({order.products.length})
+                            Ordered Products ({order.products?.length || 0})
                           </h3>
                         </div>
                         <div className="divide-y">
-                          {order.products.map((p, idx) => (
+                          {order.products?.map((p, idx) => (
                             <div
                               key={idx}
                               className="flex flex-col px-4 py-3 text-sm text-gray-700"
@@ -452,6 +536,7 @@ const Orders = () => {
                                   onChange={(e) =>
                                     updateStatus(order.id, e.target.value)
                                   }
+                                  className="accent-green-600"
                                 />
                                 <span>{label}</span>
                               </label>
@@ -473,7 +558,7 @@ const Orders = () => {
                             </p>
                           </div>
                           <p className="text-xs text-gray-500 mt-1">
-                            Includes all products and taxes
+                            Includes all products {order.deliveryCharge > 0 && `+ ₹${order.deliveryCharge} delivery`}
                           </p>
                         </div>
                       </div>
