@@ -19,8 +19,8 @@ const PORT = process.env.PORT || 5000;
 
 app.use(
   cors({
-    origin: "http://localhost:5173",
-    // origin: "https://ags-ilws.onrender.com",
+    // origin: "http://localhost:5173",
+    origin: "https://ags-ilws.onrender.com",
     credentials: true,
   })
 );
