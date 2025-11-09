@@ -61,71 +61,68 @@ export default function Cart() {
   const productTotal = cartItems.reduce((sum, item) => sum + item.price * item.quantity, 0);
   const total = productTotal + deliveryCharge;
 
-const generateUPIPaymentLink = () => {
-  // Use Math.round to get integer amount
-  const amountStr = Math.round(total).toString();
-  const encodedName = encodeURIComponent(UPI_CONFIG.name);
-  const note = `Order_${Date.now()}`;
-
-  // Direct Google Pay UPI link that opens the app
-  return `google.pay://upi/pay?pa=${UPI_CONFIG.number}&pn=${encodedName}&am=${amountStr}&cu=INR&tn=${note}`;
-};
-
-const initiateUPIPayment = () => {
-  if (!UPI_CONFIG.number) {
-    Swal.fire({
-      icon: "error",
-      title: "UPI Not Configured",
-      text: "UPI payment is not available. Please contact support.",
-      confirmButtonColor: "#dc2626",
-    });
-    return false;
-  }
-
-  try {
-    const upiLink = generateUPIPaymentLink();
-    console.log("Opening Google Pay Link:", upiLink);
+  const generateUPIPaymentLink = () => {
+    // Changed to integer amount
+    const amountStr = Math.round(total).toString();
+    const encodedName = encodeURIComponent(UPI_CONFIG.name);
+    const note = `Order_${Date.now()}`;
     
-    // Directly open Google Pay app
-    window.location.href = upiLink;
-    
-    return true;
-  } catch (error) {
-    console.error("Error opening Google Pay:", error);
-    
-    // Fallback: Show UPI ID for manual payment
-    Swal.fire({
-      icon: "info",
-      title: "Manual UPI Payment",
-      html: `
-        <div class="text-left">
-          <p class="text-sm">Please open Google Pay and send payment to:</p>
-          <p class="text-lg font-bold text-green-600 mt-2">${UPI_CONFIG.number}</p>
-          <div class="mt-3 space-y-1 text-sm">
-            <div class="flex justify-between">
-              <span>Amount:</span>
-              <span class="font-bold">₹${Math.round(total)}</span>
-            </div>
-            <div class="flex justify-between">
-              <span>Name:</span>
-              <span>${UPI_CONFIG.name}</span>
+    // Format for UPI: upi://pay?pa=UPI_ID&pn=NAME&am=AMOUNT&cu=INR&tn=NOTE
+    return `upi://pay?pa=${UPI_CONFIG.number}&pn=${encodedName}&am=${amountStr}&cu=INR&tn=${note}`;
+  };
+
+  const initiateUPIPayment = () => {
+    if (!UPI_CONFIG.number) {
+      Swal.fire({
+        icon: "error",
+        title: "UPI Not Configured",
+        text: "UPI payment is not available. Please contact support.",
+        confirmButtonColor: "#dc2626",
+      });
+      return false;
+    }
+
+    try {
+      const upiLink = generateUPIPaymentLink();
+      console.log("Opening UPI Link:", upiLink);
+      
+      // Try to open UPI app directly (works with Google Pay, PhonePe, Paytm, BHIM, etc.)
+      window.location.href = upiLink;
+      
+      return true;
+    } catch (error) {
+      console.error("Error opening UPI:", error);
+      
+      // Fallback: Show UPI ID for manual payment
+      Swal.fire({
+        icon: "info",
+        title: "Manual UPI Payment",
+        html: `
+          <div class="text-left">
+            <p class="text-sm">Please open your UPI app and send payment to:</p>
+            <p class="text-lg font-bold text-green-600 mt-2">${UPI_CONFIG.number}</p>
+            <div class="mt-3 space-y-1 text-sm">
+              <div class="flex justify-between">
+                <span>Amount:</span>
+                <span class="font-bold">₹${Math.round(total)}</span>
+              </div>
+              <div class="flex justify-between">
+                <span>Name:</span>
+                <span>${UPI_CONFIG.name}</span>
+              </div>
             </div>
           </div>
-          <p class="text-xs text-gray-500 mt-3">
-            Open Google Pay app and enter this UPI ID manually.
-          </p>
-        </div>
-      `,
-      confirmButtonText: "I've Paid",
-      showCancelButton: true,
-      cancelButtonText: "Cancel",
-      confirmButtonColor: "#16a34a",
-      cancelButtonColor: "#dc2626",
-    });
-    
-    return true;
-  }
-};
+        `,
+        confirmButtonText: "I've Paid",
+        showCancelButton: true,
+        cancelButtonText: "Cancel",
+        confirmButtonColor: "#16a34a",
+        cancelButtonColor: "#dc2626",
+      });
+      
+      return true;
+    }
+  };
 
   const updatePaymentStatus = async (orderId, status) => {
     try {
@@ -245,7 +242,7 @@ const placeOrder = async () => {
               <span class="text-orange-600">₹${total.toFixed(2)}</span>
             </div>
           </div>
-          <p class="mt-3 text-sm">Click "Pay Now" to complete payment via Google Pay/UPI.</p>
+          <p class="mt-3 text-sm">Click "Pay Now" to complete payment via UPI.</p>
         </div>
       `,
       showCancelButton: true,
@@ -323,8 +320,7 @@ const placeOrder = async () => {
 
           console.log("Order placed successfully, ID:", orderId);
 
-          // TODO: Uncomment when email route is ready on backend
-          /*
+          {/* Commented email functionality
           // TRIGGER ORDER EMAIL - Get the actual database order ID from response
           const dbOrderId = orderRes.data.order?.id || orderRes.data.id;
           if (dbOrderId) {
@@ -339,7 +335,7 @@ const placeOrder = async () => {
               // Don't fail the entire order if email fails
             }
           }
-          */
+          */}
 
           await Swal.fire({
             icon: "success",
@@ -425,7 +421,6 @@ const placeOrder = async () => {
     setPlacingOrder(false);
   }
 };
-
   return (
     <div className="min-h-screen bg-gradient-to-b from-green-50 to-white py-10 px-5 md:px-10">
       <div className="max-w-4xl mx-auto bg-white rounded-2xl shadow-lg p-4 md:p-8">
@@ -637,7 +632,7 @@ const placeOrder = async () => {
                     <h3 className="text-sm font-semibold text-gray-800 mb-2">Payment Method</h3>
                     <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg">
                       <p className="text-xs text-blue-800">
-                        Payment will be processed via Google Pay/UPI. You'll be redirected to complete the payment securely.
+                        Payment will be processed via UPI. You'll be redirected to your UPI app (Google Pay, PhonePe, Paytm, etc.) to complete the payment.
                       </p>
                       {UPI_CONFIG.number && (
                         <p className="text-xs text-gray-600 mt-1">
