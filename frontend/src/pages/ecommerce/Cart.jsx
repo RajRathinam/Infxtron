@@ -65,9 +65,9 @@ export default function Cart() {
     const amountStr = total.toFixed(2);
     const encodedName = encodeURIComponent(UPI_CONFIG.name);
     const note = `Order_${Date.now()}`;
-    
-    // Format for UPI: upi://pay?pa=UPI_ID&pn=NAME&am=AMOUNT&cu=INR&tn=NOTE
-    return `upi://pay?pa=${UPI_CONFIG.number}&pn=${encodedName}&am=${amountStr}&cu=INR&tn=${note}`;
+
+    // Use Google Pay web link for all devices - most reliable cross-platform
+    return `https://gpay.app.goo.gl/dUQK9c?pa=${UPI_CONFIG.number}&pn=${encodedName}&am=${amountStr}&cu=INR&tn=${note}`;
   };
 
   const initiateUPIPayment = () => {
@@ -85,8 +85,8 @@ export default function Cart() {
       const upiLink = generateUPIPaymentLink();
       console.log("Opening UPI Link:", upiLink);
       
-      // Try to open UPI app directly (works with Google Pay, PhonePe, Paytm, BHIM, etc.)
-      window.location.href = upiLink;
+      // Open in new tab for better user experience
+      window.open(upiLink, '_blank');
       
       return true;
     } catch (error) {
@@ -110,6 +110,9 @@ export default function Cart() {
                 <span>${UPI_CONFIG.name}</span>
               </div>
             </div>
+            <p class="text-xs text-gray-500 mt-3">
+              Or open Google Pay and enter this UPI ID manually.
+            </p>
           </div>
         `,
         confirmButtonText: "I've Paid",
@@ -241,7 +244,7 @@ const placeOrder = async () => {
               <span class="text-orange-600">₹${total.toFixed(2)}</span>
             </div>
           </div>
-          <p class="mt-3 text-sm">Click "Pay Now" to complete payment via UPI.</p>
+          <p class="mt-3 text-sm">Click "Pay Now" to complete payment via Google Pay/UPI.</p>
         </div>
       `,
       showCancelButton: true,
@@ -319,6 +322,8 @@ const placeOrder = async () => {
 
           console.log("Order placed successfully, ID:", orderId);
 
+          // TODO: Uncomment when email route is ready on backend
+          /*
           // TRIGGER ORDER EMAIL - Get the actual database order ID from response
           const dbOrderId = orderRes.data.order?.id || orderRes.data.id;
           if (dbOrderId) {
@@ -333,6 +338,7 @@ const placeOrder = async () => {
               // Don't fail the entire order if email fails
             }
           }
+          */
 
           await Swal.fire({
             icon: "success",
@@ -418,6 +424,7 @@ const placeOrder = async () => {
     setPlacingOrder(false);
   }
 };
+
   return (
     <div className="min-h-screen bg-gradient-to-b from-green-50 to-white py-10 px-5 md:px-10">
       <div className="max-w-4xl mx-auto bg-white rounded-2xl shadow-lg p-4 md:p-8">
@@ -629,7 +636,7 @@ const placeOrder = async () => {
                     <h3 className="text-sm font-semibold text-gray-800 mb-2">Payment Method</h3>
                     <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg">
                       <p className="text-xs text-blue-800">
-                        Payment will be processed via UPI. You'll be redirected to your UPI app (Google Pay, PhonePe, Paytm, etc.) to complete the payment.
+                        Payment will be processed via Google Pay/UPI. You'll be redirected to complete the payment securely.
                       </p>
                       {UPI_CONFIG.number && (
                         <p className="text-xs text-gray-600 mt-1">
