@@ -61,15 +61,15 @@ export default function Cart() {
   const productTotal = cartItems.reduce((sum, item) => sum + item.price * item.quantity, 0);
   const total = productTotal + deliveryCharge;
 
-  const generateUPIPaymentLink = () => {
-    // Use Math.round to remove decimals and show integer amount
-    const amountStr = Math.round(total).toString();
-    const encodedName = encodeURIComponent(UPI_CONFIG.name);
-    const note = `Order_${Date.now()}`;
+const generateUPIPaymentLink = () => {
+  // Change this line - use Math.round to get integer amount
+  const amountStr = Math.round(total).toString();
+  const encodedName = encodeURIComponent(UPI_CONFIG.name);
+  const note = `Order_${Date.now()}`;
 
-    // Use Google Pay web link for all devices - most reliable cross-platform
-    return `https://gpay.app.goo.gl/dUQK9c?pa=${UPI_CONFIG.number}&pn=${encodedName}&am=${amountStr}&cu=INR&tn=${note}`;
-  };
+  // Use Google Pay web link for all devices - most reliable cross-platform
+  return `https://gpay.app.goo.gl/dUQK9c?pa=${UPI_CONFIG.number}&pn=${encodedName}&am=${amountStr}&cu=INR&tn=${note}`;
+};
 
   const initiateUPIPayment = () => {
     if (!UPI_CONFIG.number) {
@@ -104,7 +104,7 @@ export default function Cart() {
             <div class="mt-3 space-y-1 text-sm">
               <div class="flex justify-between">
                 <span>Amount:</span>
-                <span class="font-bold">₹${Math.round(total)}</span>
+                <span class="font-bold">₹${total.toFixed(2)}</span>
               </div>
               <div class="flex justify-between">
                 <span>Name:</span>
@@ -232,17 +232,17 @@ const placeOrder = async () => {
           <div class="mt-2 space-y-1 text-sm">
             <div class="flex justify-between">
               <span>Products:</span>
-              <span>₹${Math.round(productTotal)}</span>
+              <span>₹${productTotal.toFixed(2)}</span>
             </div>
             ${deliveryCharge > 0 ? `
               <div class="flex justify-between">
                 <span>Delivery Charge:</span>
-                <span>₹${Math.round(deliveryCharge)}</span>
+                <span>₹${deliveryCharge.toFixed(2)}</span>
               </div>
             ` : ''}
             <div class="flex justify-between border-t border-gray-300 pt-1 font-bold">
               <span>Total Amount:</span>
-              <span class="text-orange-600">₹${Math.round(total)}</span>
+              <span class="text-orange-600">₹${total.toFixed(2)}</span>
             </div>
           </div>
           <p class="mt-3 text-sm">Click "Pay Now" to complete payment via Google Pay/UPI.</p>
@@ -288,7 +288,7 @@ const placeOrder = async () => {
         title: "Payment Confirmation",
         html: `
           <div class="text-left">
-            <p class="text-sm">Did you complete the payment of <strong>₹${Math.round(total)}</strong>?</p>
+            <p class="text-sm">Did you complete the payment of <strong>₹${total.toFixed(2)}</strong>?</p>
             <div class="mt-2 p-2 bg-gray-50 rounded text-xs">
               <p><strong>UPI ID:</strong> ${UPI_CONFIG.number}</p>
               <p><strong>Order ID:</strong> ${orderId}</p>
@@ -352,7 +352,7 @@ const placeOrder = async () => {
                   <p class="text-xs font-semibold text-green-800">Order Details:</p>
                   <p class="text-xs mt-1"><strong>Order ID:</strong> ${orderId}</p>
                   <p class="text-xs"><strong>Delivery:</strong> ${selectedPoint.name}</p>
-                  <p class="text-xs"><strong>Total Paid:</strong> ₹${Math.round(total)}</p>
+                  <p class="text-xs"><strong>Total Paid:</strong> ₹${total.toFixed(2)}</p>
                 </div>
               </div>
             `,
@@ -385,7 +385,7 @@ const placeOrder = async () => {
                 <p>Payment was successful but we couldn't save your order.</p>
                 <p class="text-sm text-gray-600 mt-2">Please contact support with your order ID:</p>
                 <p class="text-xs font-bold mt-1">${orderId}</p>
-                <p class="text-xs text-gray-500 mt-2">Amount: ₹${Math.round(total)}</p>
+                <p class="text-xs text-gray-500 mt-2">Amount: ₹${total.toFixed(2)}</p>
               </div>
             `,
             confirmButtonColor: "#dc2626",
@@ -507,7 +507,7 @@ const placeOrder = async () => {
                         </div>
 
                         <span className="font-bold text-gray-900 text-sm md:text-base w-20 text-right">
-                          ₹{Math.round(item.price * item.quantity)}
+                          ₹{(item.price * item.quantity).toFixed(2)}
                         </span>
                       </div>
                     </div>
@@ -520,17 +520,17 @@ const placeOrder = async () => {
             <div className="mt-6 space-y-2 border-t border-gray-300 pt-4">
               <div className="flex justify-between text-sm">
                 <span>Products Total:</span>
-                <span>₹{Math.round(productTotal)}</span>
+                <span>₹{productTotal.toFixed(2)}</span>
               </div>
               {deliveryCharge > 0 && (
                 <div className="flex justify-between text-sm">
                   <span>Delivery Charge:</span>
-                  <span>₹{Math.round(deliveryCharge)}</span>
+                  <span>₹{deliveryCharge.toFixed(2)}</span>
                 </div>
               )}
               <div className="flex justify-between text-lg font-bold border-t border-gray-300 pt-2">
                 <span>Total Amount:</span>
-                <span className="text-orange-600">₹{Math.round(total)}</span>
+                <span className="text-orange-600">₹{total.toFixed(2)}</span>
               </div>
             </div>
 
@@ -678,7 +678,7 @@ const placeOrder = async () => {
                     ? "Processing..." 
                     : !UPI_CONFIG.number
                       ? "Payment Unavailable"
-                      : `Pay ₹${Math.round(total)} via UPI`
+                      : `Pay ₹${total.toFixed(2)} via UPI`
                   }
                 </motion.button>
               )}
