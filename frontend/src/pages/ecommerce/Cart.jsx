@@ -62,70 +62,70 @@ export default function Cart() {
   const total = productTotal + deliveryCharge;
 
 const generateUPIPaymentLink = () => {
-  // Change this line - use Math.round to get integer amount
+  // Use Math.round to get integer amount
   const amountStr = Math.round(total).toString();
   const encodedName = encodeURIComponent(UPI_CONFIG.name);
   const note = `Order_${Date.now()}`;
 
-  // Use Google Pay web link for all devices - most reliable cross-platform
-  return `https://gpay.app.goo.gl/dUQK9c?pa=${UPI_CONFIG.number}&pn=${encodedName}&am=${amountStr}&cu=INR&tn=${note}`;
+  // Direct Google Pay UPI link that opens the app
+  return `google.pay://upi/pay?pa=${UPI_CONFIG.number}&pn=${encodedName}&am=${amountStr}&cu=INR&tn=${note}`;
 };
 
-  const initiateUPIPayment = () => {
-    if (!UPI_CONFIG.number) {
-      Swal.fire({
-        icon: "error",
-        title: "UPI Not Configured",
-        text: "UPI payment is not available. Please contact support.",
-        confirmButtonColor: "#dc2626",
-      });
-      return false;
-    }
+const initiateUPIPayment = () => {
+  if (!UPI_CONFIG.number) {
+    Swal.fire({
+      icon: "error",
+      title: "UPI Not Configured",
+      text: "UPI payment is not available. Please contact support.",
+      confirmButtonColor: "#dc2626",
+    });
+    return false;
+  }
 
-    try {
-      const upiLink = generateUPIPaymentLink();
-      console.log("Opening UPI Link:", upiLink);
-      
-      // Open in new tab for better user experience
-      window.open(upiLink, '_blank');
-      
-      return true;
-    } catch (error) {
-      console.error("Error opening UPI:", error);
-      
-      // Fallback: Show UPI ID for manual payment
-      Swal.fire({
-        icon: "info",
-        title: "Manual UPI Payment",
-        html: `
-          <div class="text-left">
-            <p class="text-sm">Please open your UPI app and send payment to:</p>
-            <p class="text-lg font-bold text-green-600 mt-2">${UPI_CONFIG.number}</p>
-            <div class="mt-3 space-y-1 text-sm">
-              <div class="flex justify-between">
-                <span>Amount:</span>
-                <span class="font-bold">₹${total.toFixed(2)}</span>
-              </div>
-              <div class="flex justify-between">
-                <span>Name:</span>
-                <span>${UPI_CONFIG.name}</span>
-              </div>
+  try {
+    const upiLink = generateUPIPaymentLink();
+    console.log("Opening Google Pay Link:", upiLink);
+    
+    // Directly open Google Pay app
+    window.location.href = upiLink;
+    
+    return true;
+  } catch (error) {
+    console.error("Error opening Google Pay:", error);
+    
+    // Fallback: Show UPI ID for manual payment
+    Swal.fire({
+      icon: "info",
+      title: "Manual UPI Payment",
+      html: `
+        <div class="text-left">
+          <p class="text-sm">Please open Google Pay and send payment to:</p>
+          <p class="text-lg font-bold text-green-600 mt-2">${UPI_CONFIG.number}</p>
+          <div class="mt-3 space-y-1 text-sm">
+            <div class="flex justify-between">
+              <span>Amount:</span>
+              <span class="font-bold">₹${Math.round(total)}</span>
             </div>
-            <p class="text-xs text-gray-500 mt-3">
-              Or open Google Pay and enter this UPI ID manually.
-            </p>
+            <div class="flex justify-between">
+              <span>Name:</span>
+              <span>${UPI_CONFIG.name}</span>
+            </div>
           </div>
-        `,
-        confirmButtonText: "I've Paid",
-        showCancelButton: true,
-        cancelButtonText: "Cancel",
-        confirmButtonColor: "#16a34a",
-        cancelButtonColor: "#dc2626",
-      });
-      
-      return true;
-    }
-  };
+          <p class="text-xs text-gray-500 mt-3">
+            Open Google Pay app and enter this UPI ID manually.
+          </p>
+        </div>
+      `,
+      confirmButtonText: "I've Paid",
+      showCancelButton: true,
+      cancelButtonText: "Cancel",
+      confirmButtonColor: "#16a34a",
+      cancelButtonColor: "#dc2626",
+    });
+    
+    return true;
+  }
+};
 
   const updatePaymentStatus = async (orderId, status) => {
     try {
