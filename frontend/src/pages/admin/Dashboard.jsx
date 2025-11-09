@@ -256,14 +256,14 @@ const submit = async (e) => {
         onChange={(e) => setImage(e.target.files?.[0] || null)}
         className="border border-gray-300 rounded focus:outline-none px-3 py-2 md:col-span-2"
       />
-      <label className="flex items-center gap-2 text-sm md:col-span-2">
+      {/* <label className="flex items-center gap-2 text-sm md:col-span-2">
         <input
           type="checkbox"
           checked={notify}
           onChange={(e) => setNotify(e.target.checked)}
         />
         Send to all offer subscribers
-      </label>
+      </label> */}
       <div className="md:col-span-2">
         <button
           disabled={submitting}

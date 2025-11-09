@@ -1,14 +1,16 @@
 import React, { useEffect, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Search, Trash2, Eye, User, Phone, Mail, MapPin, MessageCircle, Gift, X } from "lucide-react";
+import { Search, Trash2, Eye, User, Phone, Mail, MapPin, MessageCircle, Gift, X, Download, Filter } from "lucide-react";
 import axiosInstance from "../../utils/axiosConfig";
 import Swal from "sweetalert2";
+import * as XLSX from "xlsx";
 
 const Customers = () => {
   const [customers, setCustomers] = useState([]);
   const [filtered, setFiltered] = useState([]);
   const [search, setSearch] = useState("");
   const [filterEmail, setFilterEmail] = useState(false);
+  const [filterDuplicates, setFilterDuplicates] = useState(false);
   const [loading, setLoading] = useState(false);
   const [selectedCustomer, setSelectedCustomer] = useState(null);
 
@@ -48,6 +50,28 @@ const Customers = () => {
     fetchCustomers();
   }, []);
 
+  // Remove duplicates by phone number (keep the latest entry)
+  const removeDuplicates = (customerList) => {
+    const uniqueMap = new Map();
+    
+    customerList.forEach(customer => {
+      if (customer.phone) {
+        const existing = uniqueMap.get(customer.phone);
+        if (!existing || new Date(customer.createdAt) > new Date(existing.createdAt)) {
+          uniqueMap.set(customer.phone, customer);
+        }
+      } else {
+        // For customers without phone, use a combination of name and email
+        const uniqueKey = `${customer.name || ''}-${customer.email || ''}`;
+        if (!uniqueMap.has(uniqueKey)) {
+          uniqueMap.set(uniqueKey, customer);
+        }
+      }
+    });
+    
+    return Array.from(uniqueMap.values());
+  };
+
   // Search & Filter
   useEffect(() => {
     const normalizedSearch = search.trim().toLowerCase();
@@ -60,8 +84,12 @@ const Customers = () => {
       results = results.filter((c) => !!(c.email && c.email.trim() !== ""));
     }
 
+    if (filterDuplicates) {
+      results = removeDuplicates(results);
+    }
+
     setFiltered(results);
-  }, [search, filterEmail, customers]);
+  }, [search, filterEmail, filterDuplicates, customers]);
 
   // Delete Customer
   const handleDelete = async (id) => {
@@ -97,7 +125,7 @@ const Customers = () => {
     }
   };
 
-  // Format date
+  // Format date for display
   const formatDate = (dateString) => {
     return new Date(dateString).toLocaleDateString('en-IN', {
       year: 'numeric',
@@ -108,12 +136,152 @@ const Customers = () => {
     });
   };
 
+  // Format date for Excel
+  const formatDateForExcel = (dateString) => {
+    return new Date(dateString).toLocaleDateString('en-IN', {
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit'
+    });
+  };
+
+  // Export to Excel
+  const exportToExcel = () => {
+    if (filtered.length === 0) {
+      Swal.fire({
+        icon: "warning",
+        title: "No Data to Export",
+        text: "There are no customers to export.",
+        confirmButtonColor: "#6dce00",
+      });
+      return;
+    }
+
+    try {
+      // Prepare data for Excel
+      const excelData = filtered.map(customer => ({
+        "ID": customer.id,
+        "Name": customer.name || "Not Provided",
+        "Phone": customer.phone || "Not Provided",
+        "Email": customer.email || "Not Provided",
+        "Address": customer.address || "Not Provided",
+        "Wants Offers": customer.wantsOffers ? "Yes" : "No",
+        "Message": customer.message || "No Message",
+        "Registered Date": formatDateForExcel(customer.createdAt),
+        "Last Updated": formatDateForExcel(customer.updatedAt)
+      }));
+
+      // Create workbook and worksheet
+      const wb = XLSX.utils.book_new();
+      const ws = XLSX.utils.json_to_sheet(excelData);
+
+      // Set column widths
+      const colWidths = [
+        { wch: 8 },  // ID
+        { wch: 20 }, // Name
+        { wch: 15 }, // Phone
+        { wch: 25 }, // Email
+        { wch: 40 }, // Address
+        { wch: 12 }, // Wants Offers
+        { wch: 30 }, // Message
+        { wch: 20 }, // Registered Date
+        { wch: 20 }  // Last Updated
+      ];
+      ws['!cols'] = colWidths;
+
+      // Add worksheet to workbook
+      XLSX.utils.book_append_sheet(wb, ws, "Customers");
+
+      // Generate filename with timestamp
+      const timestamp = new Date().toISOString().split('T')[0];
+      const filename = `Customers_Export_${timestamp}.xlsx`;
+
+      // Export to Excel
+      XLSX.writeFile(wb, filename);
+
+      Swal.fire({
+        icon: "success",
+        title: "Export Successful!",
+        text: `${filtered.length} customers exported to ${filename}`,
+        confirmButtonColor: "#6dce00",
+        timer: 3000,
+      });
+
+    } catch (error) {
+      console.error("Export error:", error);
+      Swal.fire({
+        icon: "error",
+        title: "Export Failed",
+        text: "Failed to export customers. Please try again.",
+        confirmButtonColor: "#d33",
+      });
+    }
+  };
+
+  // Get statistics
+  const getStats = () => {
+    const totalCustomers = customers.length;
+    const uniqueCustomers = removeDuplicates(customers).length;
+    const withEmail = customers.filter(c => c.email && c.email.trim() !== "").length;
+    const withOffers = customers.filter(c => c.wantsOffers).length;
+
+    return {
+      totalCustomers,
+      uniqueCustomers,
+      withEmail,
+      withOffers,
+      duplicates: totalCustomers - uniqueCustomers
+    };
+  };
+
+  const stats = getStats();
+
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div>
-        <h1 className="text-2xl font-semibold text-gray-800">Customers</h1>
-        <p className="text-gray-500">View and filter customer details.</p>
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+        <div>
+          <h1 className="text-2xl font-semibold text-gray-800">Customers</h1>
+          <p className="text-gray-500">View and filter customer details.</p>
+        </div>
+        
+        {/* Export Button */}
+        <motion.button
+          whileHover={{ scale: 1.05 }}
+          whileTap={{ scale: 0.95 }}
+          onClick={exportToExcel}
+          disabled={filtered.length === 0}
+          className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium text-sm transition-all ${
+            filtered.length === 0
+              ? "bg-gray-300 text-gray-500 cursor-not-allowed"
+              : "bg-green-500 hover:bg-green-600 text-white shadow-md"
+          }`}
+        >
+          <Download size={18} />
+          Export Excel ({filtered.length})
+        </motion.button>
+      </div>
+
+      {/* Statistics Cards */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-100">
+          <div className="text-2xl font-bold text-gray-800">{stats.totalCustomers}</div>
+          <div className="text-sm text-gray-500">Total Customers</div>
+        </div>
+        <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-100">
+          <div className="text-2xl font-bold text-green-600">{stats.uniqueCustomers}</div>
+          <div className="text-sm text-gray-500">Unique Customers</div>
+        </div>
+        <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-100">
+          <div className="text-2xl font-bold text-blue-600">{stats.withEmail}</div>
+          <div className="text-sm text-gray-500">With Email</div>
+        </div>
+        <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-100">
+          <div className="text-2xl font-bold text-purple-600">{stats.withOffers}</div>
+          <div className="text-sm text-gray-500">Want Offers</div>
+        </div>
       </div>
 
       {/* Search + Filter */}
@@ -129,18 +297,41 @@ const Customers = () => {
           />
         </div>
 
-        <div className="flex items-center gap-2 bg-gray-50 px-3 py-2 rounded-lg border border-gray-200">
-          <input
-            type="checkbox"
-            id="filterEmail"
-            checked={filterEmail}
-            onChange={() => setFilterEmail((prev) => !prev)}
-            className="accent-[#6dce00] w-4 h-4"
-          />
-          <label htmlFor="filterEmail" className="text-gray-700 text-sm font-medium">
-            Show only customers with email
-          </label>
-        </div>
+<div className="flex flex-wrap items-center gap-3">
+  {/* Email Filter */}
+  <div className="flex items-center gap-2 bg-gray-50 px-3 py-2 rounded-lg border border-gray-200 flex-shrink-0">
+    <input
+      type="checkbox"
+      id="filterEmail"
+      checked={filterEmail}
+      onChange={() => setFilterEmail((prev) => !prev)}
+      className="accent-[#6dce00] w-4 h-4"
+    />
+    <label htmlFor="filterEmail" className="text-gray-700 text-xs font-medium whitespace-nowrap">
+      With Email Only
+    </label>
+  </div>
+
+  {/* Duplicate Filter */}
+  <div className="flex items-center gap-2 bg-gray-50 px-3 py-2 rounded-lg border border-gray-200 flex-shrink-0">
+    <input
+      type="checkbox"
+      id="filterDuplicates"
+      checked={filterDuplicates}
+      onChange={() => setFilterDuplicates((prev) => !prev)}
+      className="accent-[#6dce00] w-4 h-4"
+    />
+    <label htmlFor="filterDuplicates" className="text-gray-700 text-xs font-medium whitespace-nowrap">
+      Remove Duplicates
+    </label>
+  </div>
+
+  {/* Filter Info */}
+  <div className="text-xs text-gray-500 bg-blue-50 px-2 py-1 rounded border border-blue-200 flex-shrink-0">
+    Showing: {filtered.length} customers
+    {filterDuplicates && ` (${stats.duplicates} duplicates removed)`}
+  </div>
+</div>
       </div>
 
       {/* Table */}
@@ -177,7 +368,7 @@ const Customers = () => {
                       </div>
                       <div>
                         <p className="text-xs text-gray-800 capitalize">{c.name || "Unknown"}</p>
-                      
+                        <p className="text-xs text-gray-500">{formatDate(c.createdAt)}</p>
                       </div>
                     </div>
                   </td>

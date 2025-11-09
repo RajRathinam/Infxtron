@@ -9,7 +9,8 @@ import {
   Minus,
   ShoppingCart,
   ArrowRight,
-  FileText // Added FileText icon for PDF
+  FileText,
+  X // Added X icon for closing the modal
 } from "lucide-react";
 
 const Products = () => {
@@ -17,7 +18,10 @@ const Products = () => {
   const [selectedType, setSelectedType] = useState({});
   const [products, setProducts] = useState([]);
   const [filteredProducts, setFilteredProducts] = useState([]);
+  const [showGoogleForm, setShowGoogleForm] = useState(false); // State to control form visibility
+  
   const BASE_URL = import.meta.env.VITE_API_BASE_URL;
+  const GOOGLE_FORM_URL = import.meta.env.VITE_GOOGLE_FORM_URL; // Make sure this env variable exists
 
   // Get today's day
   const today = new Date().toLocaleDateString("en-US", { weekday: "long" });
@@ -136,6 +140,23 @@ const Products = () => {
 
     const existing = JSON.parse(sessionStorage.getItem("cartItems")) || [];
 
+    // Check if the same product with same order type already exists in cart
+    const existingProductIndex = existing.findIndex(
+      (item) => item.productId === product.id && item.orderType === orderType
+    );
+
+    if (existingProductIndex > -1) {
+      // Product already exists in cart with same order type
+      Swal.fire({
+        title: "Product Already in Cart!",
+        text: `${product.productName} (${getOrderTypeLabel(orderType)}) is already in your cart. You can update the quantity from the cart.`,
+        icon: "warning",
+        confirmButtonColor: "#f59e0b",
+        confirmButtonText: "OK",
+      });
+      return;
+    }
+
     const cartItem = {
       ...product,
       _id: `${product.id}-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
@@ -179,11 +200,67 @@ const Products = () => {
     return days.join(", ");
   };
 
+  // Function to handle opening the Google Form
+  const handleOpenGoogleForm = () => {
+    setShowGoogleForm(true);
+  };
+
+  // Function to handle closing the Google Form
+  const handleCloseGoogleForm = () => {
+    setShowGoogleForm(false);
+  };
+
   return (
     <section
       id="products"
       className="min-h-screen px-6 md:px-16 py-16 text-gray-800 overflow-hidden relative"
     >
+      {/* Google Form Modal */}
+      {showGoogleForm && (
+        <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50 p-4">
+          <motion.div
+            initial={{ opacity: 0, scale: 0.9 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.9 }}
+            className="bg-white rounded shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-hidden"
+          >
+            <div className="flex justify-between items-center p-4 border-b border-gray-300">
+              <h3 className="text-xl font-bold text-gray-800">
+                Customized Diet Plan Form
+              </h3>
+              <button
+                onClick={handleCloseGoogleForm}
+                className="p-2 hover:bg-gray-100 rounded-full transition-colors"
+              >
+                <X size={24} />
+              </button>
+            </div>
+            <div className="overflow-auto max-h-[calc(90vh-80px)]">
+              {GOOGLE_FORM_URL ? (
+                <iframe 
+                  src={GOOGLE_FORM_URL} 
+                  width="100%" 
+                  height="1122" 
+                  frameBorder="0"
+                  marginHeight="0" 
+                  marginWidth="0"
+                  className="w-full"
+                >
+                  Loading…
+                </iframe>
+              ) : (
+                <div className="text-center py-8">
+                  <p className="text-red-500">Google Form URL not configured.</p>
+                  <p className="text-sm text-gray-600 mt-2">
+                    Please check your environment variables.
+                  </p>
+                </div>
+              )}
+            </div>
+          </motion.div>
+        </div>
+      )}
+
       <div className="text-start mb-8 md:mb-12">
         <span className="text-xl sm:text-2xl md:text-3xl dancing-script text-orange-600 font-semibold">
           Today's Products
@@ -362,12 +439,13 @@ const Products = () => {
           </p>
         </div>
         <div className="flex flex-col sm:flex-row gap-4 justify-center items-center">
-          <a href="https://www.infygrid.in">
-            <button className="bg-gradient-to-r from-emerald-600 to-teal-600 text-white px-8 py-4 rounded-2xl font-bold text-sm md:text-lg shadow-lg hover:shadow-xl transform hover:scale-105 transition-all duration-300 flex items-center gap-3">
-              <span>Get Customized Diet Plan</span>
-              <ArrowRight size={20} />
-            </button>
-          </a>
+          <button 
+            onClick={handleOpenGoogleForm}
+            className="bg-gradient-to-r from-emerald-600 to-teal-600 text-white px-8 py-4 rounded-2xl font-bold text-sm md:text-lg shadow-lg hover:shadow-xl transform hover:scale-105 transition-all duration-300 flex items-center gap-3"
+          >
+            <span>Get Customized Diet Plan</span>
+            <ArrowRight size={20} />
+          </button>
           <p className="text-xs sm:text-sm text-gray-600">
             Contact us for personalized consultation
           </p>

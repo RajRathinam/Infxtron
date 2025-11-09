@@ -20,9 +20,9 @@ export default function Cart() {
 
   // Delivery points configuration
   const DELIVERY_POINTS = [
-    { id: "point_a", name: "Delivery Point A", address: "123 Main Street, City Center", freeDelivery: true },
-    { id: "point_b", name: "Delivery Point B", address: "456 Market Road, Downtown", freeDelivery: true },
-    { id: "point_c", name: "Delivery Point C", address: "789 Park Avenue, Uptown", freeDelivery: true },
+    { id: "point_a", name: "Delivery Point A", address: "Dr. Rajarethinam Homeopathic Clinic, Poornam Tower, Neela South Street, Nagapattinam.", freeDelivery: true },
+    { id: "point_b", name: "Delivery Point B", address: "Mr. Fit Gym, Public Office Road, Nagapattinam (Near Collector Office).", freeDelivery: true },
+    { id: "point_c", name: "Delivery Point C", address: "Arthi Medicals, Public Office Road, Near NDHS School, Velipalayam, Nagapattinam.", freeDelivery: true },
     { id: "home_delivery", name: "Home Delivery", address: "Deliver to my address", freeDelivery: false, charge: 10 }
   ];
 
@@ -139,250 +139,285 @@ export default function Cart() {
     setDeliveryCharge(point?.freeDelivery ? 0 : (point?.charge || 0));
   };
 
-  const placeOrder = async () => {
-    // Validate required fields
-    if (!customer.name || !customer.phone || !selectedDeliveryPoint) {
+const placeOrder = async () => {
+  // Validate required fields
+  if (!customer.name || !customer.phone || !selectedDeliveryPoint) {
+    await Swal.fire({
+      icon: "warning",
+      title: "Incomplete Details",
+      text: "Please fill name, phone, and select delivery point to place order.",
+      confirmButtonColor: "#FF9800",
+    });
+    return;
+  }
+
+  // Validate phone number
+  if (!/^\d{10}$/.test(customer.phone)) {
+    await Swal.fire({
+      icon: "warning",
+      title: "Invalid Phone",
+      text: "Please enter a valid 10-digit phone number.",
+      confirmButtonColor: "#FF9800",
+    });
+    return;
+  }
+
+  // Validate home delivery address
+  if (selectedDeliveryPoint === 'home_delivery' && !customer.address.trim()) {
+    await Swal.fire({
+      icon: "warning",
+      title: "Address Required",
+      text: "Please enter your delivery address for home delivery.",
+      confirmButtonColor: "#FF9800",
+    });
+    return;
+  }
+
+  // Validate UPI configuration
+  if (!UPI_CONFIG.number) {
+    await Swal.fire({
+      icon: "error",
+      title: "Payment Unavailable",
+      text: "Payment is currently unavailable. Please contact support.",
+      confirmButtonColor: "#dc2626",
+    });
+    return;
+  }
+
+  const selectedPoint = DELIVERY_POINTS.find(p => p.id === selectedDeliveryPoint);
+  const finalAddress = selectedPoint.id === 'home_delivery' 
+    ? customer.address 
+    : `${selectedPoint.name}, ${selectedPoint.address}`;
+
+  // Generate order ID upfront for reference
+  const orderId = `ORD_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+  
+  const payload = {
+    id: orderId, // Use our generated ID for reference
+    name: customer.name,
+    phone: customer.phone,
+    email: customer.email || undefined,
+    address: finalAddress,
+    wantsOffers: customer.wantsOffers,
+    products: cartItems.map((ci) => ({
+      productId: ci.id || ci._id,
+      productName: ci.productName,
+      quantity: ci.quantity,
+      price: ci.price,
+      orderType: ci.orderType,
+      packName: ci.packName,
+    })),
+    totalPrice: Math.round(total),
+    deliveryPoint: selectedDeliveryPoint,
+    deliveryCharge: deliveryCharge,
+    transactionId: `TXN_${Date.now()}`,
+    paymentMethod: "upi",
+    paymentStatus: "pending", // Start with pending status
+  };
+
+  setPlacingOrder(true);
+  
+  try {
+    // Show payment confirmation first
+    const paymentConfirmed = await Swal.fire({
+      icon: "info",
+      title: "Proceed to Payment",
+      html: `
+        <div class="text-left">
+          <p class="font-semibold">Order Summary:</p>
+          <div class="mt-2 space-y-1 text-sm">
+            <div class="flex justify-between">
+              <span>Products:</span>
+              <span>₹${productTotal.toFixed(2)}</span>
+            </div>
+            ${deliveryCharge > 0 ? `
+              <div class="flex justify-between">
+                <span>Delivery Charge:</span>
+                <span>₹${deliveryCharge.toFixed(2)}</span>
+              </div>
+            ` : ''}
+            <div class="flex justify-between border-t border-gray-300 pt-1 font-bold">
+              <span>Total Amount:</span>
+              <span class="text-orange-600">₹${total.toFixed(2)}</span>
+            </div>
+          </div>
+          <p class="mt-3 text-sm">Click "Pay Now" to complete payment via UPI.</p>
+        </div>
+      `,
+      showCancelButton: true,
+      confirmButtonText: "Pay Now",
+      cancelButtonText: "Cancel",
+      confirmButtonColor: "#16a34a",
+      cancelButtonColor: "#dc2626",
+    });
+
+    if (!paymentConfirmed.isConfirmed) {
+      // User cancelled before payment
       await Swal.fire({
-        icon: "warning",
-        title: "Incomplete Details",
-        text: "Please fill name, phone, and select delivery point to place order.",
-        confirmButtonColor: "#FF9800",
+        icon: "info",
+        title: "Payment Cancelled",
+        text: "You can complete your order anytime from the cart.",
+        confirmButtonColor: "#6b7280",
       });
+      setPlacingOrder(false);
       return;
     }
 
-    // Validate phone number
-    if (!/^\d{10}$/.test(customer.phone)) {
-      await Swal.fire({
-        icon: "warning",
-        title: "Invalid Phone",
-        text: "Please enter a valid 10-digit phone number.",
-        confirmButtonColor: "#FF9800",
-      });
-      return;
-    }
-
-    // Validate home delivery address
-    if (selectedDeliveryPoint === 'home_delivery' && !customer.address.trim()) {
-      await Swal.fire({
-        icon: "warning",
-        title: "Address Required",
-        text: "Please enter your delivery address for home delivery.",
-        confirmButtonColor: "#FF9800",
-      });
-      return;
-    }
-
-    // Validate UPI configuration
-    if (!UPI_CONFIG.number) {
+    // Initiate UPI payment
+    const paymentInitiated = initiateUPIPayment();
+    
+    if (!paymentInitiated) {
       await Swal.fire({
         icon: "error",
-        title: "Payment Unavailable",
-        text: "Payment is currently unavailable. Please contact support.",
+        title: "Payment Failed",
+        text: "Could not process payment. Please try again.",
         confirmButtonColor: "#dc2626",
       });
+      setPlacingOrder(false);
       return;
     }
 
-    const selectedPoint = DELIVERY_POINTS.find(p => p.id === selectedDeliveryPoint);
-    const finalAddress = selectedPoint.id === 'home_delivery' 
-      ? customer.address 
-      : `${selectedPoint.name}, ${selectedPoint.address}`;
-
-    const payload = {
-      name: customer.name,
-      phone: customer.phone,
-      email: customer.email || undefined,
-      address: finalAddress,
-      wantsOffers: customer.wantsOffers,
-      products: cartItems.map((ci) => ({
-        productId: ci.id || ci._id,
-        productName: ci.productName,
-        quantity: ci.quantity,
-        price: ci.price,
-        orderType: ci.orderType,
-        packName: ci.packName,
-      })),
-      totalPrice: Math.round(total),
-      deliveryPoint: selectedDeliveryPoint,
-      deliveryCharge: deliveryCharge,
-      transactionId: `TXN_${Date.now()}`,
-      paymentMethod: "upi",
-      paymentStatus: "initiated",
-    };
-
-    setPlacingOrder(true);
-    
-    try {
-      // First, place the order
-      const orderRes = await axiosInstance.post("/api/orders", payload, {
-        withCredentials: true,
-      });
-
-      if (!(orderRes.status === 200 || orderRes.status === 201)) {
-        throw new Error("Order placement failed");
-      }
-
-      const orderId = orderRes.data.order?.id || orderRes.data.id;
-      console.log("Order placed successfully, ID:", orderId);
-
-      // Show payment confirmation
-      const paymentConfirmed = await Swal.fire({
-        icon: "info",
-        title: "Proceed to Payment",
+    // Wait a moment for UPI app to open, then ask for confirmation
+    setTimeout(async () => {
+      const paymentResult = await Swal.fire({
+        icon: "question",
+        title: "Payment Confirmation",
         html: `
           <div class="text-left">
-            <p class="font-semibold">Order Summary:</p>
-            <div class="mt-2 space-y-1 text-sm">
-              <div class="flex justify-between">
-                <span>Products:</span>
-                <span>₹${productTotal.toFixed(2)}</span>
-              </div>
-              ${deliveryCharge > 0 ? `
-                <div class="flex justify-between">
-                  <span>Delivery Charge:</span>
-                  <span>₹${deliveryCharge.toFixed(2)}</span>
-                </div>
-              ` : ''}
-              <div class="flex justify-between border-t border-gray-300 pt-1 font-bold">
-                <span>Total Amount:</span>
-                <span class="text-orange-600">₹${total.toFixed(2)}</span>
-              </div>
+            <p class="text-sm">Did you complete the payment of <strong>₹${total.toFixed(2)}</strong>?</p>
+            <div class="mt-2 p-2 bg-gray-50 rounded text-xs">
+              <p><strong>UPI ID:</strong> ${UPI_CONFIG.number}</p>
+              <p><strong>Order ID:</strong> ${orderId}</p>
             </div>
-            <p class="mt-3 text-sm">Click "Pay Now" to complete payment via UPI.</p>
+            <p class="text-xs text-gray-500 mt-2">Please check your UPI app for payment confirmation.</p>
           </div>
         `,
         showCancelButton: true,
-        confirmButtonText: "Pay Now",
-        cancelButtonText: "Cancel Order",
+        confirmButtonText: "Yes, Payment Done",
+        cancelButtonText: "Payment Failed",
         confirmButtonColor: "#16a34a",
         cancelButtonColor: "#dc2626",
+        allowOutsideClick: false,
       });
 
-      if (paymentConfirmed.isConfirmed) {
-        // Initiate UPI payment
-        const paymentInitiated = initiateUPIPayment();
-        
-        if (!paymentInitiated) {
-          await Swal.fire({
-            icon: "error",
-            title: "Payment Failed",
-            text: "Could not process payment. Please try again.",
-            confirmButtonColor: "#dc2626",
-          });
-          return;
-        }
+      if (paymentResult.isConfirmed) {
+        // Payment completed - NOW send data to backend
+        try {
+          // Update payload with completed status
+          const completedPayload = {
+            ...payload,
+            paymentStatus: "completed"
+          };
 
-        // Wait a moment for UPI app to open, then ask for confirmation
-        setTimeout(async () => {
-          const paymentResult = await Swal.fire({
-            icon: "question",
-            title: "Payment Confirmation",
+          const orderRes = await axiosInstance.post("/api/orders", completedPayload, {
+            withCredentials: true,
+          });
+
+          if (!(orderRes.status === 200 || orderRes.status === 201)) {
+            throw new Error("Order placement failed");
+          }
+
+          console.log("Order placed successfully, ID:", orderId);
+
+          // TRIGGER ORDER EMAIL - Get the actual database order ID from response
+          const dbOrderId = orderRes.data.order?.id || orderRes.data.id;
+          if (dbOrderId) {
+            try {
+              console.log("Triggering order email for order ID:", dbOrderId);
+              await axiosInstance.post(`/api/orders/${dbOrderId}/send-email`, {}, {
+                withCredentials: true,
+              });
+              console.log("Order email triggered successfully");
+            } catch (emailError) {
+              console.error("Failed to trigger order email:", emailError);
+              // Don't fail the entire order if email fails
+            }
+          }
+
+          await Swal.fire({
+            icon: "success",
+            title: "Order Confirmed!",
             html: `
               <div class="text-left">
-                <p class="text-sm">Did you complete the payment of <strong>₹${total.toFixed(2)}</strong>?</p>
-                <div class="mt-2 p-2 bg-gray-50 rounded text-xs">
-                  <p><strong>UPI ID:</strong> ${UPI_CONFIG.number}</p>
-                  <p><strong>Order ID:</strong> ${orderId}</p>
+                <p>Thank you for your payment!</p>
+                <p class="text-sm text-gray-600 mt-2">Your order has been confirmed and will be delivered soon.</p>
+                <div class="mt-3 p-3 bg-green-50 rounded border border-green-200">
+                  <p class="text-xs font-semibold text-green-800">Order Details:</p>
+                  <p class="text-xs mt-1"><strong>Order ID:</strong> ${orderId}</p>
+                  <p class="text-xs"><strong>Delivery:</strong> ${selectedPoint.name}</p>
+                  <p class="text-xs"><strong>Total Paid:</strong> ₹${total.toFixed(2)}</p>
                 </div>
-                <p class="text-xs text-gray-500 mt-2">Please check your UPI app for payment confirmation.</p>
               </div>
             `,
-            showCancelButton: true,
-            confirmButtonText: "Yes, Payment Done",
-            cancelButtonText: "Payment Failed",
             confirmButtonColor: "#16a34a",
-            cancelButtonColor: "#dc2626",
-            allowOutsideClick: false,
+            timer: 8000,
           });
 
-          if (paymentResult.isConfirmed) {
-            // Mark payment as completed
-            await updatePaymentStatus(orderId, "completed");
-            
-            await Swal.fire({
-              icon: "success",
-              title: "Order Confirmed! 🎉",
-              html: `
-                <div class="text-left">
-                  <p>Thank you for your payment!</p>
-                  <p class="text-sm text-gray-600 mt-2">Your order has been confirmed and will be delivered soon.</p>
-                  <div class="mt-3 p-3 bg-green-50 rounded border border-green-200">
-                    <p class="text-xs font-semibold text-green-800">Order Details:</p>
-                    <p class="text-xs mt-1"><strong>Order ID:</strong> ${orderId}</p>
-                    <p class="text-xs"><strong>Delivery:</strong> ${selectedPoint.name}</p>
-                    <p class="text-xs"><strong>Total Paid:</strong> ₹${total.toFixed(2)}</p>
-                  </div>
-                </div>
-              `,
-              confirmButtonColor: "#16a34a",
-              timer: 8000,
-            });
+          // Clear cart and reset form
+          sessionStorage.removeItem("cartItems");
+          setCartItems([]);
+          setShowPayment(false);
+          setCustomer({
+            name: "",
+            phone: "",
+            email: "",
+            address: "",
+            wantsOffers: false,
+          });
+          setSelectedDeliveryPoint("");
+          setDeliveryCharge(0);
 
-            // Clear cart and reset form
-            sessionStorage.removeItem("cartItems");
-            setCartItems([]);
-            setShowPayment(false);
-            setCustomer({
-              name: "",
-              phone: "",
-              email: "",
-              address: "",
-              wantsOffers: false,
-            });
-            setSelectedDeliveryPoint("");
-            setDeliveryCharge(0);
-
-          } else {
-            // Mark payment as failed
-            await updatePaymentStatus(orderId, "failed");
-            
-            await Swal.fire({
-              icon: "info",
-              title: "Payment Not Completed",
-              html: `
-                <div class="text-left">
-                  <p>Your order is placed but payment is pending.</p>
-                  <p class="text-sm text-gray-600 mt-2">Please complete the payment to confirm your order.</p>
-                  <p class="text-xs text-gray-500 mt-2">Order ID: <strong>${orderId}</strong></p>
-                </div>
-              `,
-              confirmButtonColor: "#6b7280",
-            });
-          }
-        }, 2000);
+        } catch (err) {
+          console.error("Failed to save completed order:", err);
+          
+          await Swal.fire({
+            icon: "error",
+            title: "Order Save Failed",
+            html: `
+              <div class="text-left">
+                <p>Payment was successful but we couldn't save your order.</p>
+                <p class="text-sm text-gray-600 mt-2">Please contact support with your order ID:</p>
+                <p class="text-xs font-bold mt-1">${orderId}</p>
+                <p class="text-xs text-gray-500 mt-2">Amount: ₹${total.toFixed(2)}</p>
+              </div>
+            `,
+            confirmButtonColor: "#dc2626",
+          });
+        }
 
       } else {
-        // Cancel order
-        await updatePaymentStatus(orderId, "cancelled");
+        // Payment failed or cancelled - DO NOT send to backend
         await Swal.fire({
           icon: "info",
-          title: "Order Cancelled",
-          text: "Your order has been cancelled.",
+          title: "Payment Not Completed",
+          html: `
+            <div class="text-left">
+              <p>Payment was not completed.</p>
+              <p class="text-sm text-gray-600 mt-2">Your order has not been placed. You can try again anytime.</p>
+              <p class="text-xs text-gray-500 mt-2">Reference ID: <strong>${orderId}</strong></p>
+            </div>
+          `,
           confirmButtonColor: "#6b7280",
         });
       }
-
-    } catch (err) {
-      console.error("Order placement failed:", err);
-
-      let errorMessage = "Failed to place order. Please try again.";
       
-      if (err.response?.data?.message) {
-        errorMessage = err.response.data.message;
-      }
-
-      await Swal.fire({
-        icon: "error",
-        title: "Order Failed",
-        text: errorMessage,
-        confirmButtonColor: "#FF3B30",
-      });
-    } finally {
       setPlacingOrder(false);
-    }
-  };
+      
+    }, 2000);
 
+  } catch (err) {
+    console.error("Payment process failed:", err);
+    
+    await Swal.fire({
+      icon: "error",
+      title: "Process Failed",
+      text: "Something went wrong. Please try again.",
+      confirmButtonColor: "#FF3B30",
+    });
+    
+    setPlacingOrder(false);
+  }
+};
   return (
     <div className="min-h-screen bg-gradient-to-b from-green-50 to-white py-10 px-5 md:px-10">
       <div className="max-w-4xl mx-auto bg-white rounded-2xl shadow-lg p-4 md:p-8">
