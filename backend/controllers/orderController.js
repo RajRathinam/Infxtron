@@ -348,7 +348,16 @@ export const sendOrderEmail = async (req, res) => {
   </div>
 </div>`;
 
-    // Check if OWNER_EMAIL is configured
+    // Check if EMAIL_USER is configured (using the working variable)
+    if (!process.env.EMAIL_USER) {
+      console.error("EMAIL_USER environment variable is not set");
+      return res.status(500).json({ 
+        message: "Email configuration error",
+        details: "EMAIL_USER is not configured" 
+      });
+    }
+
+    // Check if OWNER_EMAIL is configured for recipient
     if (!process.env.OWNER_EMAIL) {
       console.error("OWNER_EMAIL environment variable is not set");
       return res.status(500).json({ 
@@ -357,9 +366,9 @@ export const sendOrderEmail = async (req, res) => {
       });
     }
 
-    console.log(`Sending email to: ${process.env.OWNER_EMAIL}`);
+    console.log(`Sending email from: ${process.env.EMAIL_USER} to: ${process.env.OWNER_EMAIL}`);
 
-    // Send email to owner
+    // Send email to owner using the working configuration
     await sendEmail({
       to: process.env.OWNER_EMAIL,
       subject: `New Order Received from ${name}`,
