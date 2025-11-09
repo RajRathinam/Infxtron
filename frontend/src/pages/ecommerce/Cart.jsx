@@ -61,180 +61,65 @@ export default function Cart() {
   const productTotal = cartItems.reduce((sum, item) => sum + item.price * item.quantity, 0);
   const total = productTotal + deliveryCharge;
 
-const generateUPIPaymentLink = () => {
-  const amountStr = total.toFixed(2);
-  const encodedName = encodeURIComponent(UPI_CONFIG.name);
-  const note = `Order_${Date.now()}`;
+  const generateUPIPaymentLink = () => {
+    const amountStr = total.toFixed(2);
+    const encodedName = encodeURIComponent(UPI_CONFIG.name);
+    const note = `Order_${Date.now()}`;
 
-  // Multiple UPI link formats for better compatibility
-  const upiLinks = {
-    // Standard UPI deep link (works on Android)
-    upiDeepLink: `upi://pay?pa=${UPI_CONFIG.number}&pn=${encodedName}&am=${amountStr}&cu=INR&tn=${note}`,
-    
-    // Google Pay UPI link (official format)
-    googlePay: `https://gpay.app.goo.gl/bXyRjA?pa=${UPI_CONFIG.number}&pn=${encodedName}&am=${amountStr}&cu=INR&tn=${note}`,
-    
-    // PhonePe UPI link
-    phonePe: `phonepe://upi/pay?pa=${UPI_CONFIG.number}&pn=${encodedName}&am=${amountStr}&cu=INR&tn=${note}`,
-    
-    // Paytm UPI link
-    paytm: `paytmmp://upi/pay?pa=${UPI_CONFIG.number}&pn=${encodedName}&am=${amountStr}&cu=INR&tn=${note}`,
-    
-    // Web fallback for manual payment
-    webManual: `https://upiqr.in/api/v3/generate?identifier=${UPI_CONFIG.number}&amount=${amountStr}&name=${encodedName}`
+    // Multiple UPI link formats for better compatibility
+    const upiLinks = {
+      // Standard UPI deep link (works on Android)
+      upiDeepLink: `upi://pay?pa=${UPI_CONFIG.number}&pn=${encodedName}&am=${amountStr}&cu=INR&tn=${note}`,
+      
+      // Google Pay web link (most reliable)
+      googlePay: `https://pay.google.com/gp/v1/pay?pa=${UPI_CONFIG.number}&pn=${encodedName}&am=${amountStr}&cu=INR&tn=${note}`,
+      
+      // PhonePe UPI link
+      phonePe: `phonepe://pay?pa=${UPI_CONFIG.number}&pn=${encodedName}&am=${amountStr}&cu=INR&tn=${note}`,
+      
+      // Paytm UPI link
+      paytm: `paytmmp://pay?pa=${UPI_CONFIG.number}&pn=${encodedName}&am=${amountStr}&cu=INR&tn=${note}`,
+    };
+
+    return upiLinks;
   };
 
-  return upiLinks;
-};
-
-const initiateUPIPayment = () => {
-  if (!UPI_CONFIG.number) {
-    Swal.fire({
-      icon: "error",
-      title: "UPI Not Configured",
-      text: "UPI payment is not available. Please contact support.",
-      confirmButtonColor: "#dc2626",
-    });
-    return false;
-  }
-
-  try {
-    const upiLinks = generateUPIPaymentLink();
-    
-    // Show payment options to user
+  const showManualUPIPayment = () => {
     Swal.fire({
       icon: "info",
-      title: "Choose Payment App",
+      title: "Manual UPI Payment",
       html: `
         <div class="text-left">
-          <p class="text-sm mb-4">Select your preferred UPI app to complete payment:</p>
-          <div class="space-y-2">
-            <button id="gpay-btn" class="w-full bg-white border border-gray-300 rounded-lg p-3 hover:bg-gray-50 text-left">
-              <div class="flex items-center gap-3">
-                <div class="w-8 h-8 bg-green-500 rounded-full flex items-center justify-center text-white font-bold">G</div>
-                <div>
-                  <div class="font-medium">Google Pay</div>
-                  <div class="text-xs text-gray-500">Recommended for all devices</div>
-                </div>
+          <p class="text-sm">Please open your UPI app and send payment to:</p>
+          <div class="bg-gray-50 p-4 rounded-lg mt-3 border border-gray-200">
+            <p class="text-lg font-bold text-green-600 text-center">${UPI_CONFIG.number}</p>
+            <div class="mt-3 space-y-2 text-sm">
+              <div class="flex justify-between">
+                <span class="font-medium">Amount:</span>
+                <span class="font-bold">₹${total.toFixed(2)}</span>
               </div>
-            </button>
-            
-            <button id="phonepe-btn" class="w-full bg-white border border-gray-300 rounded-lg p-3 hover:bg-gray-50 text-left">
-              <div class="flex items-center gap-3">
-                <div class="w-8 h-8 bg-purple-500 rounded-full flex items-center justify-center text-white font-bold">P</div>
-                <div class="font-medium">PhonePe</div>
+              <div class="flex justify-between">
+                <span class="font-medium">Recipient Name:</span>
+                <span>${UPI_CONFIG.name}</span>
               </div>
-            </button>
-            
-            <button id="paytm-btn" class="w-full bg-white border border-gray-300 rounded-lg p-3 hover:bg-gray-50 text-left">
-              <div class="flex items-center gap-3">
-                <div class="w-8 h-8 bg-blue-500 rounded-full flex items-center justify-center text-white font-bold">P</div>
-                <div class="font-medium">Paytm</div>
+              <div class="flex justify-between">
+                <span class="font-medium">Order ID:</span>
+                <span class="text-xs">ORD_${Date.now()}</span>
               </div>
-            </button>
-            
-            <button id="any-upi-btn" class="w-full bg-white border border-gray-300 rounded-lg p-3 hover:bg-gray-50 text-left">
-              <div class="flex items-center gap-3">
-                <div class="w-8 h-8 bg-orange-500 rounded-full flex items-center justify-center text-white font-bold">U</div>
-                <div>
-                  <div class="font-medium">Any UPI App</div>
-                  <div class="text-xs text-gray-500">Manual payment option</div>
-                </div>
-              </div>
-            </button>
+            </div>
           </div>
+          <p class="text-xs text-gray-500 mt-3 text-center">
+            After payment, click "I've Paid" to confirm your order.
+          </p>
         </div>
       `,
-      showConfirmButton: false,
+      confirmButtonText: "I've Paid",
       showCancelButton: true,
       cancelButtonText: "Cancel",
+      confirmButtonColor: "#16a34a",
       cancelButtonColor: "#dc2626",
-      didOpen: () => {
-        // Add event listeners to buttons
-        document.getElementById('gpay-btn').addEventListener('click', () => {
-          window.open(upiLinks.googlePay, '_blank');
-          Swal.close();
-        });
-        
-        document.getElementById('phonepe-btn').addEventListener('click', () => {
-          window.location.href = upiLinks.phonePe;
-          setTimeout(() => {
-            // Fallback if PhonePe not installed
-            window.open(upiLinks.googlePay, '_blank');
-          }, 500);
-        });
-        
-        document.getElementById('paytm-btn').addEventListener('click', () => {
-          window.location.href = upiLinks.paytm;
-          setTimeout(() => {
-            // Fallback if Paytm not installed
-            window.open(upiLinks.googlePay, '_blank');
-          }, 500);
-        });
-        
-        document.getElementById('any-upi-btn').addEventListener('click', () => {
-          showManualUPIPayment();
-          Swal.close();
-        });
-      }
     });
-
-    return true;
-  } catch (error) {
-    console.error("Error opening UPI:", error);
-    // Fallback to manual payment
-    showManualUPIPayment();
-    return true;
-  }
-};
-
-const showManualUPIPayment = () => {
-  Swal.fire({
-    icon: "info",
-    title: "Manual UPI Payment",
-    html: `
-      <div class="text-left">
-        <p class="text-sm">Please open your UPI app and send payment to:</p>
-        <div class="bg-gray-50 p-4 rounded-lg mt-3 border border-gray-200">
-          <p class="text-lg font-bold text-green-600 text-center">${UPI_CONFIG.number}</p>
-          <div class="mt-3 space-y-2 text-sm">
-            <div class="flex justify-between">
-              <span class="font-medium">Amount:</span>
-              <span class="font-bold">₹${total.toFixed(2)}</span>
-            </div>
-            <div class="flex justify-between">
-              <span class="font-medium">Recipient Name:</span>
-              <span>${UPI_CONFIG.name}</span>
-            </div>
-            <div class="flex justify-between">
-              <span class="font-medium">Order ID:</span>
-              <span class="text-xs">ORD_${Date.now()}</span>
-            </div>
-          </div>
-        </div>
-        <p class="text-xs text-gray-500 mt-3 text-center">
-          Or scan this QR code with your UPI app:
-        </p>
-        <div class="flex justify-center mt-2">
-          <div class="bg-white p-4 rounded-lg border border-gray-300">
-            <!-- QR Code placeholder - you can generate actual QR code later -->
-            <div class="w-32 h-32 bg-gray-200 flex items-center justify-center text-gray-500 text-xs text-center">
-              QR Code<br/>Image
-            </div>
-          </div>
-        </div>
-        <p class="text-xs text-gray-500 mt-3">
-          After payment, click "I've Paid" to confirm your order.
-        </p>
-      </div>
-    `,
-    confirmButtonText: "I've Paid",
-    showCancelButton: true,
-    cancelButtonText: "Cancel",
-    confirmButtonColor: "#16a34a",
-    cancelButtonColor: "#dc2626",
-  });
-};
+  };
 
   const initiateUPIPayment = () => {
     if (!UPI_CONFIG.number) {
@@ -248,57 +133,92 @@ const showManualUPIPayment = () => {
     }
 
     try {
-      const upiLink = generateUPIPaymentLink();
-      console.log("Opening UPI Link:", upiLink);
+      const upiLinks = generateUPIPaymentLink();
       
-      // Open in new tab for better user experience
-      window.open(upiLink, '_blank');
-      
+      // Show payment options to user
+      Swal.fire({
+        icon: "info",
+        title: "Choose Payment App",
+        html: `
+          <div class="text-left">
+            <p class="text-sm mb-4">Select your preferred UPI app to complete payment:</p>
+            <div class="space-y-2">
+              <button id="gpay-btn" class="w-full bg-white border border-gray-300 rounded-lg p-3 hover:bg-gray-50 text-left">
+                <div class="flex items-center gap-3">
+                  <div class="w-8 h-8 bg-green-500 rounded-full flex items-center justify-center text-white font-bold">G</div>
+                  <div>
+                    <div class="font-medium">Google Pay</div>
+                    <div class="text-xs text-gray-500">Recommended for all devices</div>
+                  </div>
+                </div>
+              </button>
+              
+              <button id="phonepe-btn" class="w-full bg-white border border-gray-300 rounded-lg p-3 hover:bg-gray-50 text-left">
+                <div class="flex items-center gap-3">
+                  <div class="w-8 h-8 bg-purple-500 rounded-full flex items-center justify-center text-white font-bold">P</div>
+                  <div class="font-medium">PhonePe</div>
+                </div>
+              </button>
+              
+              <button id="paytm-btn" class="w-full bg-white border border-gray-300 rounded-lg p-3 hover:bg-gray-50 text-left">
+                <div class="flex items-center gap-3">
+                  <div class="w-8 h-8 bg-blue-500 rounded-full flex items-center justify-center text-white font-bold">P</div>
+                  <div class="font-medium">Paytm</div>
+                </div>
+              </button>
+              
+              <button id="any-upi-btn" class="w-full bg-white border border-gray-300 rounded-lg p-3 hover:bg-gray-50 text-left">
+                <div class="flex items-center gap-3">
+                  <div class="w-8 h-8 bg-orange-500 rounded-full flex items-center justify-center text-white font-bold">U</div>
+                  <div>
+                    <div class="font-medium">Any UPI App</div>
+                    <div class="text-xs text-gray-500">Manual payment option</div>
+                  </div>
+                </div>
+              </button>
+            </div>
+          </div>
+        `,
+        showConfirmButton: false,
+        showCancelButton: true,
+        cancelButtonText: "Cancel",
+        cancelButtonColor: "#dc2626",
+        didOpen: () => {
+          // Add event listeners to buttons
+          document.getElementById('gpay-btn').addEventListener('click', () => {
+            window.open(upiLinks.googlePay, '_blank');
+            Swal.close();
+          });
+          
+          document.getElementById('phonepe-btn').addEventListener('click', () => {
+            window.location.href = upiLinks.phonePe;
+            setTimeout(() => {
+              // Fallback if PhonePe not installed
+              window.open(upiLinks.googlePay, '_blank');
+            }, 500);
+          });
+          
+          document.getElementById('paytm-btn').addEventListener('click', () => {
+            window.location.href = upiLinks.paytm;
+            setTimeout(() => {
+              // Fallback if Paytm not installed
+              window.open(upiLinks.googlePay, '_blank');
+            }, 500);
+          });
+          
+          document.getElementById('any-upi-btn').addEventListener('click', () => {
+            showManualUPIPayment();
+            Swal.close();
+          });
+        }
+      });
+
       return true;
     } catch (error) {
       console.error("Error opening UPI:", error);
-      
-      // Fallback: Show UPI ID for manual payment
-      Swal.fire({
-        icon: "info",
-        title: "Manual UPI Payment",
-        html: `
-          <div class="text-left">
-            <p class="text-sm">Please open your UPI app and send payment to:</p>
-            <p class="text-lg font-bold text-green-600 mt-2">${UPI_CONFIG.number}</p>
-            <div class="mt-3 space-y-1 text-sm">
-              <div class="flex justify-between">
-                <span>Amount:</span>
-                <span class="font-bold">₹${total.toFixed(2)}</span>
-              </div>
-              <div class="flex justify-between">
-                <span>Name:</span>
-                <span>${UPI_CONFIG.name}</span>
-              </div>
-            </div>
-            <p class="text-xs text-gray-500 mt-3">
-              Or open Google Pay and enter this UPI ID manually.
-            </p>
-          </div>
-        `,
-        confirmButtonText: "I've Paid",
-        showCancelButton: true,
-        cancelButtonText: "Cancel",
-        confirmButtonColor: "#16a34a",
-        cancelButtonColor: "#dc2626",
-      });
-      
+      // Fallback to manual payment
+      showManualUPIPayment();
       return true;
-    }
-  };
-
-  const updatePaymentStatus = async (orderId, status) => {
-    try {
-      await axiosInstance.patch(`/api/orders/${orderId}/payment-status`, {
-        paymentStatus: status
-      });
-    } catch (err) {
-      console.error("Failed to update payment status:", err);
     }
   };
 
@@ -308,288 +228,288 @@ const showManualUPIPayment = () => {
     setDeliveryCharge(point?.freeDelivery ? 0 : (point?.charge || 0));
   };
 
-const placeOrder = async () => {
-  // Validate required fields
-  if (!customer.name || !customer.phone || !selectedDeliveryPoint) {
-    await Swal.fire({
-      icon: "warning",
-      title: "Incomplete Details",
-      text: "Please fill name, phone, and select delivery point to place order.",
-      confirmButtonColor: "#FF9800",
-    });
-    return;
-  }
-
-  // Validate phone number
-  if (!/^\d{10}$/.test(customer.phone)) {
-    await Swal.fire({
-      icon: "warning",
-      title: "Invalid Phone",
-      text: "Please enter a valid 10-digit phone number.",
-      confirmButtonColor: "#FF9800",
-    });
-    return;
-  }
-
-  // Validate home delivery address
-  if (selectedDeliveryPoint === 'home_delivery' && !customer.address.trim()) {
-    await Swal.fire({
-      icon: "warning",
-      title: "Address Required",
-      text: "Please enter your delivery address for home delivery.",
-      confirmButtonColor: "#FF9800",
-    });
-    return;
-  }
-
-  // Validate UPI configuration
-  if (!UPI_CONFIG.number) {
-    await Swal.fire({
-      icon: "error",
-      title: "Payment Unavailable",
-      text: "Payment is currently unavailable. Please contact support.",
-      confirmButtonColor: "#dc2626",
-    });
-    return;
-  }
-
-  const selectedPoint = DELIVERY_POINTS.find(p => p.id === selectedDeliveryPoint);
-  const finalAddress = selectedPoint.id === 'home_delivery' 
-    ? customer.address 
-    : `${selectedPoint.name}, ${selectedPoint.address}`;
-
-  // Generate order ID upfront for reference
-  const orderId = `ORD_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-  
-  const payload = {
-    id: orderId, // Use our generated ID for reference
-    name: customer.name,
-    phone: customer.phone,
-    email: customer.email || undefined,
-    address: finalAddress,
-    wantsOffers: customer.wantsOffers,
-    products: cartItems.map((ci) => ({
-      productId: ci.id || ci._id,
-      productName: ci.productName,
-      quantity: ci.quantity,
-      price: ci.price,
-      orderType: ci.orderType,
-      packName: ci.packName,
-    })),
-    totalPrice: Math.round(total),
-    deliveryPoint: selectedDeliveryPoint,
-    deliveryCharge: deliveryCharge,
-    transactionId: `TXN_${Date.now()}`,
-    paymentMethod: "upi",
-    paymentStatus: "pending", // Start with pending status
-  };
-
-  setPlacingOrder(true);
-  
-  try {
-    // Show payment confirmation first
-    const paymentConfirmed = await Swal.fire({
-      icon: "info",
-      title: "Proceed to Payment",
-      html: `
-        <div class="text-left">
-          <p class="font-semibold">Order Summary:</p>
-          <div class="mt-2 space-y-1 text-sm">
-            <div class="flex justify-between">
-              <span>Products:</span>
-              <span>₹${productTotal.toFixed(2)}</span>
-            </div>
-            ${deliveryCharge > 0 ? `
-              <div class="flex justify-between">
-                <span>Delivery Charge:</span>
-                <span>₹${deliveryCharge.toFixed(2)}</span>
-              </div>
-            ` : ''}
-            <div class="flex justify-between border-t border-gray-300 pt-1 font-bold">
-              <span>Total Amount:</span>
-              <span class="text-orange-600">₹${total.toFixed(2)}</span>
-            </div>
-          </div>
-          <p class="mt-3 text-sm">Click "Pay Now" to complete payment via Google Pay/UPI.</p>
-        </div>
-      `,
-      showCancelButton: true,
-      confirmButtonText: "Pay Now",
-      cancelButtonText: "Cancel",
-      confirmButtonColor: "#16a34a",
-      cancelButtonColor: "#dc2626",
-    });
-
-    if (!paymentConfirmed.isConfirmed) {
-      // User cancelled before payment
+  const placeOrder = async () => {
+    // Validate required fields
+    if (!customer.name || !customer.phone || !selectedDeliveryPoint) {
       await Swal.fire({
-        icon: "info",
-        title: "Payment Cancelled",
-        text: "You can complete your order anytime from the cart.",
-        confirmButtonColor: "#6b7280",
+        icon: "warning",
+        title: "Incomplete Details",
+        text: "Please fill name, phone, and select delivery point to place order.",
+        confirmButtonColor: "#FF9800",
       });
-      setPlacingOrder(false);
       return;
     }
 
-    // Initiate UPI payment
-    const paymentInitiated = initiateUPIPayment();
-    
-    if (!paymentInitiated) {
+    // Validate phone number
+    if (!/^\d{10}$/.test(customer.phone)) {
+      await Swal.fire({
+        icon: "warning",
+        title: "Invalid Phone",
+        text: "Please enter a valid 10-digit phone number.",
+        confirmButtonColor: "#FF9800",
+      });
+      return;
+    }
+
+    // Validate home delivery address
+    if (selectedDeliveryPoint === 'home_delivery' && !customer.address.trim()) {
+      await Swal.fire({
+        icon: "warning",
+        title: "Address Required",
+        text: "Please enter your delivery address for home delivery.",
+        confirmButtonColor: "#FF9800",
+      });
+      return;
+    }
+
+    // Validate UPI configuration
+    if (!UPI_CONFIG.number) {
       await Swal.fire({
         icon: "error",
-        title: "Payment Failed",
-        text: "Could not process payment. Please try again.",
+        title: "Payment Unavailable",
+        text: "Payment is currently unavailable. Please contact support.",
         confirmButtonColor: "#dc2626",
       });
-      setPlacingOrder(false);
       return;
     }
 
-    // Wait a moment for UPI app to open, then ask for confirmation
-    setTimeout(async () => {
-      const paymentResult = await Swal.fire({
-        icon: "question",
-        title: "Payment Confirmation",
+    const selectedPoint = DELIVERY_POINTS.find(p => p.id === selectedDeliveryPoint);
+    const finalAddress = selectedPoint.id === 'home_delivery' 
+      ? customer.address 
+      : `${selectedPoint.name}, ${selectedPoint.address}`;
+
+    // Generate order ID upfront for reference
+    const orderId = `ORD_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    
+    const payload = {
+      id: orderId, // Use our generated ID for reference
+      name: customer.name,
+      phone: customer.phone,
+      email: customer.email || undefined,
+      address: finalAddress,
+      wantsOffers: customer.wantsOffers,
+      products: cartItems.map((ci) => ({
+        productId: ci.id || ci._id,
+        productName: ci.productName,
+        quantity: ci.quantity,
+        price: ci.price,
+        orderType: ci.orderType,
+        packName: ci.packName,
+      })),
+      totalPrice: Math.round(total),
+      deliveryPoint: selectedDeliveryPoint,
+      deliveryCharge: deliveryCharge,
+      transactionId: `TXN_${Date.now()}`,
+      paymentMethod: "upi",
+      paymentStatus: "pending", // Start with pending status
+    };
+
+    setPlacingOrder(true);
+    
+    try {
+      // Show payment confirmation first
+      const paymentConfirmed = await Swal.fire({
+        icon: "info",
+        title: "Proceed to Payment",
         html: `
           <div class="text-left">
-            <p class="text-sm">Did you complete the payment of <strong>₹${total.toFixed(2)}</strong>?</p>
-            <div class="mt-2 p-2 bg-gray-50 rounded text-xs">
-              <p><strong>UPI ID:</strong> ${UPI_CONFIG.number}</p>
-              <p><strong>Order ID:</strong> ${orderId}</p>
+            <p class="font-semibold">Order Summary:</p>
+            <div class="mt-2 space-y-1 text-sm">
+              <div class="flex justify-between">
+                <span>Products:</span>
+                <span>₹${productTotal.toFixed(2)}</span>
+              </div>
+              ${deliveryCharge > 0 ? `
+                <div class="flex justify-between">
+                  <span>Delivery Charge:</span>
+                  <span>₹${deliveryCharge.toFixed(2)}</span>
+                </div>
+              ` : ''}
+              <div class="flex justify-between border-t border-gray-300 pt-1 font-bold">
+                <span>Total Amount:</span>
+                <span class="text-orange-600">₹${total.toFixed(2)}</span>
+              </div>
             </div>
-            <p class="text-xs text-gray-500 mt-2">Please check your UPI app for payment confirmation.</p>
+            <p class="mt-3 text-sm">Click "Pay Now" to complete payment via UPI.</p>
           </div>
         `,
         showCancelButton: true,
-        confirmButtonText: "Yes, Payment Done",
-        cancelButtonText: "Payment Failed",
+        confirmButtonText: "Pay Now",
+        cancelButtonText: "Cancel",
         confirmButtonColor: "#16a34a",
         cancelButtonColor: "#dc2626",
-        allowOutsideClick: false,
       });
 
-      if (paymentResult.isConfirmed) {
-        // Payment completed - NOW send data to backend
-        try {
-          // Update payload with completed status
-          const completedPayload = {
-            ...payload,
-            paymentStatus: "completed"
-          };
-
-          const orderRes = await axiosInstance.post("/api/orders", completedPayload, {
-            withCredentials: true,
-          });
-
-          if (!(orderRes.status === 200 || orderRes.status === 201)) {
-            throw new Error("Order placement failed");
-          }
-
-          console.log("Order placed successfully, ID:", orderId);
-
-          // TODO: Uncomment when email route is ready on backend
-          /*
-          // TRIGGER ORDER EMAIL - Get the actual database order ID from response
-          const dbOrderId = orderRes.data.order?.id || orderRes.data.id;
-          if (dbOrderId) {
-            try {
-              console.log("Triggering order email for order ID:", dbOrderId);
-              await axiosInstance.post(`/api/orders/${dbOrderId}/send-email`, {}, {
-                withCredentials: true,
-              });
-              console.log("Order email triggered successfully");
-            } catch (emailError) {
-              console.error("Failed to trigger order email:", emailError);
-              // Don't fail the entire order if email fails
-            }
-          }
-          */
-
-          await Swal.fire({
-            icon: "success",
-            title: "Order Confirmed!",
-            html: `
-              <div class="text-left">
-                <p>Thank you for your payment!</p>
-                <p class="text-sm text-gray-600 mt-2">Your order has been confirmed and will be delivered soon.</p>
-                <div class="mt-3 p-3 bg-green-50 rounded border border-green-200">
-                  <p class="text-xs font-semibold text-green-800">Order Details:</p>
-                  <p class="text-xs mt-1"><strong>Order ID:</strong> ${orderId}</p>
-                  <p class="text-xs"><strong>Delivery:</strong> ${selectedPoint.name}</p>
-                  <p class="text-xs"><strong>Total Paid:</strong> ₹${total.toFixed(2)}</p>
-                </div>
-              </div>
-            `,
-            confirmButtonColor: "#16a34a",
-            timer: 8000,
-          });
-
-          // Clear cart and reset form
-          sessionStorage.removeItem("cartItems");
-          setCartItems([]);
-          setShowPayment(false);
-          setCustomer({
-            name: "",
-            phone: "",
-            email: "",
-            address: "",
-            wantsOffers: false,
-          });
-          setSelectedDeliveryPoint("");
-          setDeliveryCharge(0);
-
-        } catch (err) {
-          console.error("Failed to save completed order:", err);
-          
-          await Swal.fire({
-            icon: "error",
-            title: "Order Save Failed",
-            html: `
-              <div class="text-left">
-                <p>Payment was successful but we couldn't save your order.</p>
-                <p class="text-sm text-gray-600 mt-2">Please contact support with your order ID:</p>
-                <p class="text-xs font-bold mt-1">${orderId}</p>
-                <p class="text-xs text-gray-500 mt-2">Amount: ₹${total.toFixed(2)}</p>
-              </div>
-            `,
-            confirmButtonColor: "#dc2626",
-          });
-        }
-
-      } else {
-        // Payment failed or cancelled - DO NOT send to backend
+      if (!paymentConfirmed.isConfirmed) {
+        // User cancelled before payment
         await Swal.fire({
           icon: "info",
-          title: "Payment Not Completed",
-          html: `
-            <div class="text-left">
-              <p>Payment was not completed.</p>
-              <p class="text-sm text-gray-600 mt-2">Your order has not been placed. You can try again anytime.</p>
-              <p class="text-xs text-gray-500 mt-2">Reference ID: <strong>${orderId}</strong></p>
-            </div>
-          `,
+          title: "Payment Cancelled",
+          text: "You can complete your order anytime from the cart.",
           confirmButtonColor: "#6b7280",
         });
+        setPlacingOrder(false);
+        return;
       }
+
+      // Initiate UPI payment
+      const paymentInitiated = initiateUPIPayment();
+      
+      if (!paymentInitiated) {
+        await Swal.fire({
+          icon: "error",
+          title: "Payment Failed",
+          text: "Could not process payment. Please try again.",
+          confirmButtonColor: "#dc2626",
+        });
+        setPlacingOrder(false);
+        return;
+      }
+
+      // Wait a moment for UPI app to open, then ask for confirmation
+      setTimeout(async () => {
+        const paymentResult = await Swal.fire({
+          icon: "question",
+          title: "Payment Confirmation",
+          html: `
+            <div class="text-left">
+              <p class="text-sm">Did you complete the payment of <strong>₹${total.toFixed(2)}</strong>?</p>
+              <div class="mt-2 p-2 bg-gray-50 rounded text-xs">
+                <p><strong>UPI ID:</strong> ${UPI_CONFIG.number}</p>
+                <p><strong>Order ID:</strong> ${orderId}</p>
+              </div>
+              <p class="text-xs text-gray-500 mt-2">Please check your UPI app for payment confirmation.</p>
+            </div>
+          `,
+          showCancelButton: true,
+          confirmButtonText: "Yes, Payment Done",
+          cancelButtonText: "Payment Failed",
+          confirmButtonColor: "#16a34a",
+          cancelButtonColor: "#dc2626",
+          allowOutsideClick: false,
+        });
+
+        if (paymentResult.isConfirmed) {
+          // Payment completed - NOW send data to backend
+          try {
+            // Update payload with completed status
+            const completedPayload = {
+              ...payload,
+              paymentStatus: "completed"
+            };
+
+            const orderRes = await axiosInstance.post("/api/orders", completedPayload, {
+              withCredentials: true,
+            });
+
+            if (!(orderRes.status === 200 || orderRes.status === 201)) {
+              throw new Error("Order placement failed");
+            }
+
+            console.log("Order placed successfully, ID:", orderId);
+
+            // TODO: Uncomment when email route is ready on backend
+            /*
+            // TRIGGER ORDER EMAIL - Get the actual database order ID from response
+            const dbOrderId = orderRes.data.order?.id || orderRes.data.id;
+            if (dbOrderId) {
+              try {
+                console.log("Triggering order email for order ID:", dbOrderId);
+                await axiosInstance.post(`/api/orders/${dbOrderId}/send-email`, {}, {
+                  withCredentials: true,
+                });
+                console.log("Order email triggered successfully");
+              } catch (emailError) {
+                console.error("Failed to trigger order email:", emailError);
+                // Don't fail the entire order if email fails
+              }
+            }
+            */
+
+            await Swal.fire({
+              icon: "success",
+              title: "Order Confirmed!",
+              html: `
+                <div class="text-left">
+                  <p>Thank you for your payment!</p>
+                  <p class="text-sm text-gray-600 mt-2">Your order has been confirmed and will be delivered soon.</p>
+                  <div class="mt-3 p-3 bg-green-50 rounded border border-green-200">
+                    <p class="text-xs font-semibold text-green-800">Order Details:</p>
+                    <p class="text-xs mt-1"><strong>Order ID:</strong> ${orderId}</p>
+                    <p class="text-xs"><strong>Delivery:</strong> ${selectedPoint.name}</p>
+                    <p class="text-xs"><strong>Total Paid:</strong> ₹${total.toFixed(2)}</p>
+                  </div>
+                </div>
+              `,
+              confirmButtonColor: "#16a34a",
+              timer: 8000,
+            });
+
+            // Clear cart and reset form
+            sessionStorage.removeItem("cartItems");
+            setCartItems([]);
+            setShowPayment(false);
+            setCustomer({
+              name: "",
+              phone: "",
+              email: "",
+              address: "",
+              wantsOffers: false,
+            });
+            setSelectedDeliveryPoint("");
+            setDeliveryCharge(0);
+
+          } catch (err) {
+            console.error("Failed to save completed order:", err);
+            
+            await Swal.fire({
+              icon: "error",
+              title: "Order Save Failed",
+              html: `
+                <div class="text-left">
+                  <p>Payment was successful but we couldn't save your order.</p>
+                  <p class="text-sm text-gray-600 mt-2">Please contact support with your order ID:</p>
+                  <p class="text-xs font-bold mt-1">${orderId}</p>
+                  <p class="text-xs text-gray-500 mt-2">Amount: ₹${total.toFixed(2)}</p>
+                </div>
+              `,
+              confirmButtonColor: "#dc2626",
+            });
+          }
+
+        } else {
+          // Payment failed or cancelled - DO NOT send to backend
+          await Swal.fire({
+            icon: "info",
+            title: "Payment Not Completed",
+            html: `
+              <div class="text-left">
+                <p>Payment was not completed.</p>
+                <p class="text-sm text-gray-600 mt-2">Your order has not been placed. You can try again anytime.</p>
+                <p class="text-xs text-gray-500 mt-2">Reference ID: <strong>${orderId}</strong></p>
+              </div>
+            `,
+            confirmButtonColor: "#6b7280",
+          });
+        }
+        
+        setPlacingOrder(false);
+        
+      }, 2000);
+
+    } catch (err) {
+      console.error("Payment process failed:", err);
+      
+      await Swal.fire({
+        icon: "error",
+        title: "Process Failed",
+        text: "Something went wrong. Please try again.",
+        confirmButtonColor: "#FF3B30",
+      });
       
       setPlacingOrder(false);
-      
-    }, 2000);
-
-  } catch (err) {
-    console.error("Payment process failed:", err);
-    
-    await Swal.fire({
-      icon: "error",
-      title: "Process Failed",
-      text: "Something went wrong. Please try again.",
-      confirmButtonColor: "#FF3B30",
-    });
-    
-    setPlacingOrder(false);
-  }
-};
+    }
+  };
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-green-50 to-white py-10 px-5 md:px-10">
@@ -798,20 +718,19 @@ const placeOrder = async () => {
                   </div>
 
                   {/* Payment Information */}
-                {/* Payment Information */}
-<div className="border-t pt-4">
-  <h3 className="text-sm font-semibold text-gray-800 mb-2">Payment Method</h3>
-  <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg">
-    <p className="text-xs text-blue-800">
-      Payment will be processed via UPI. You can choose from Google Pay, PhonePe, Paytm or any UPI app.
-    </p>
-    {UPI_CONFIG.number && (
-      <p className="text-xs text-gray-600 mt-1">
-        UPI ID: <strong>{UPI_CONFIG.number}</strong>
-      </p>
-    )}
-  </div>
-</div>
+                  <div className="border-t pt-4">
+                    <h3 className="text-sm font-semibold text-gray-800 mb-2">Payment Method</h3>
+                    <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                      <p className="text-xs text-blue-800">
+                        Payment will be processed via UPI. You can choose from Google Pay, PhonePe, Paytm or any UPI app.
+                      </p>
+                      {UPI_CONFIG.number && (
+                        <p className="text-xs text-gray-600 mt-1">
+                          UPI ID: <strong>{UPI_CONFIG.number}</strong>
+                        </p>
+                      )}
+                    </div>
+                  </div>
                 </motion.div>
               )}
             </AnimatePresence>
