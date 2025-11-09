@@ -1,6 +1,6 @@
 import Customer from "../models/Customer.js";
 import Order from "../models/Order.js";
-import { sendEmail } from "../utils/sendEmail.js";
+import { sendEmailSendGrid } from "../utils/sendEmailSendGrid.js";
 
 
 // ✅ Get all orders with complete details
@@ -181,6 +181,8 @@ export const updatePaymentStatus = async (req, res) => {
 };
 
 
+
+
 export const sendOrderEmail = async (req, res) => {
   const { id } = req.params;
 
@@ -348,12 +350,21 @@ export const sendOrderEmail = async (req, res) => {
   </div>
 </div>`;
 
-    // Check if EMAIL_USER is configured (using the working variable)
-    if (!process.env.EMAIL_USER) {
-      console.error("EMAIL_USER environment variable is not set");
+    // Check if SENDGRID_API_KEY is configured
+    if (!process.env.SENDGRID_API_KEY) {
+      console.error("SENDGRID_API_KEY environment variable is not set");
       return res.status(500).json({ 
         message: "Email configuration error",
-        details: "EMAIL_USER is not configured" 
+        details: "SENDGRID_API_KEY is not configured" 
+      });
+    }
+
+    // Check if SENDGRID_VERIFIED_SENDER is configured
+    if (!process.env.SENDGRID_VERIFIED_SENDER) {
+      console.error("SENDGRID_VERIFIED_SENDER environment variable is not set");
+      return res.status(500).json({ 
+        message: "Email configuration error",
+        details: "SENDGRID_VERIFIED_SENDER is not configured" 
       });
     }
 
@@ -366,10 +377,10 @@ export const sendOrderEmail = async (req, res) => {
       });
     }
 
-    console.log(`Sending email from: ${process.env.EMAIL_USER} to: ${process.env.OWNER_EMAIL}`);
+    console.log(`Sending email via SendGrid to: ${process.env.OWNER_EMAIL}`);
 
-    // Send email to owner using the working configuration
-    await sendEmail({
+    // Send email to owner using SendGrid
+    await sendEmailSendGrid({
       to: process.env.OWNER_EMAIL,
       subject: `New Order Received from ${name}`,
       html: htmlContent,
