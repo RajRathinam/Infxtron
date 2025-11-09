@@ -61,14 +61,180 @@ export default function Cart() {
   const productTotal = cartItems.reduce((sum, item) => sum + item.price * item.quantity, 0);
   const total = productTotal + deliveryCharge;
 
-  const generateUPIPaymentLink = () => {
-    const amountStr = total.toFixed(2);
-    const encodedName = encodeURIComponent(UPI_CONFIG.name);
-    const note = `Order_${Date.now()}`;
+const generateUPIPaymentLink = () => {
+  const amountStr = total.toFixed(2);
+  const encodedName = encodeURIComponent(UPI_CONFIG.name);
+  const note = `Order_${Date.now()}`;
 
-    // Use Google Pay web link for all devices - most reliable cross-platform
-    return `https://gpay.app.goo.gl/dUQK9c?pa=${UPI_CONFIG.number}&pn=${encodedName}&am=${amountStr}&cu=INR&tn=${note}`;
+  // Multiple UPI link formats for better compatibility
+  const upiLinks = {
+    // Standard UPI deep link (works on Android)
+    upiDeepLink: `upi://pay?pa=${UPI_CONFIG.number}&pn=${encodedName}&am=${amountStr}&cu=INR&tn=${note}`,
+    
+    // Google Pay UPI link (official format)
+    googlePay: `https://gpay.app.goo.gl/bXyRjA?pa=${UPI_CONFIG.number}&pn=${encodedName}&am=${amountStr}&cu=INR&tn=${note}`,
+    
+    // PhonePe UPI link
+    phonePe: `phonepe://upi/pay?pa=${UPI_CONFIG.number}&pn=${encodedName}&am=${amountStr}&cu=INR&tn=${note}`,
+    
+    // Paytm UPI link
+    paytm: `paytmmp://upi/pay?pa=${UPI_CONFIG.number}&pn=${encodedName}&am=${amountStr}&cu=INR&tn=${note}`,
+    
+    // Web fallback for manual payment
+    webManual: `https://upiqr.in/api/v3/generate?identifier=${UPI_CONFIG.number}&amount=${amountStr}&name=${encodedName}`
   };
+
+  return upiLinks;
+};
+
+const initiateUPIPayment = () => {
+  if (!UPI_CONFIG.number) {
+    Swal.fire({
+      icon: "error",
+      title: "UPI Not Configured",
+      text: "UPI payment is not available. Please contact support.",
+      confirmButtonColor: "#dc2626",
+    });
+    return false;
+  }
+
+  try {
+    const upiLinks = generateUPIPaymentLink();
+    
+    // Show payment options to user
+    Swal.fire({
+      icon: "info",
+      title: "Choose Payment App",
+      html: `
+        <div class="text-left">
+          <p class="text-sm mb-4">Select your preferred UPI app to complete payment:</p>
+          <div class="space-y-2">
+            <button id="gpay-btn" class="w-full bg-white border border-gray-300 rounded-lg p-3 hover:bg-gray-50 text-left">
+              <div class="flex items-center gap-3">
+                <div class="w-8 h-8 bg-green-500 rounded-full flex items-center justify-center text-white font-bold">G</div>
+                <div>
+                  <div class="font-medium">Google Pay</div>
+                  <div class="text-xs text-gray-500">Recommended for all devices</div>
+                </div>
+              </div>
+            </button>
+            
+            <button id="phonepe-btn" class="w-full bg-white border border-gray-300 rounded-lg p-3 hover:bg-gray-50 text-left">
+              <div class="flex items-center gap-3">
+                <div class="w-8 h-8 bg-purple-500 rounded-full flex items-center justify-center text-white font-bold">P</div>
+                <div class="font-medium">PhonePe</div>
+              </div>
+            </button>
+            
+            <button id="paytm-btn" class="w-full bg-white border border-gray-300 rounded-lg p-3 hover:bg-gray-50 text-left">
+              <div class="flex items-center gap-3">
+                <div class="w-8 h-8 bg-blue-500 rounded-full flex items-center justify-center text-white font-bold">P</div>
+                <div class="font-medium">Paytm</div>
+              </div>
+            </button>
+            
+            <button id="any-upi-btn" class="w-full bg-white border border-gray-300 rounded-lg p-3 hover:bg-gray-50 text-left">
+              <div class="flex items-center gap-3">
+                <div class="w-8 h-8 bg-orange-500 rounded-full flex items-center justify-center text-white font-bold">U</div>
+                <div>
+                  <div class="font-medium">Any UPI App</div>
+                  <div class="text-xs text-gray-500">Manual payment option</div>
+                </div>
+              </div>
+            </button>
+          </div>
+        </div>
+      `,
+      showConfirmButton: false,
+      showCancelButton: true,
+      cancelButtonText: "Cancel",
+      cancelButtonColor: "#dc2626",
+      didOpen: () => {
+        // Add event listeners to buttons
+        document.getElementById('gpay-btn').addEventListener('click', () => {
+          window.open(upiLinks.googlePay, '_blank');
+          Swal.close();
+        });
+        
+        document.getElementById('phonepe-btn').addEventListener('click', () => {
+          window.location.href = upiLinks.phonePe;
+          setTimeout(() => {
+            // Fallback if PhonePe not installed
+            window.open(upiLinks.googlePay, '_blank');
+          }, 500);
+        });
+        
+        document.getElementById('paytm-btn').addEventListener('click', () => {
+          window.location.href = upiLinks.paytm;
+          setTimeout(() => {
+            // Fallback if Paytm not installed
+            window.open(upiLinks.googlePay, '_blank');
+          }, 500);
+        });
+        
+        document.getElementById('any-upi-btn').addEventListener('click', () => {
+          showManualUPIPayment();
+          Swal.close();
+        });
+      }
+    });
+
+    return true;
+  } catch (error) {
+    console.error("Error opening UPI:", error);
+    // Fallback to manual payment
+    showManualUPIPayment();
+    return true;
+  }
+};
+
+const showManualUPIPayment = () => {
+  Swal.fire({
+    icon: "info",
+    title: "Manual UPI Payment",
+    html: `
+      <div class="text-left">
+        <p class="text-sm">Please open your UPI app and send payment to:</p>
+        <div class="bg-gray-50 p-4 rounded-lg mt-3 border border-gray-200">
+          <p class="text-lg font-bold text-green-600 text-center">${UPI_CONFIG.number}</p>
+          <div class="mt-3 space-y-2 text-sm">
+            <div class="flex justify-between">
+              <span class="font-medium">Amount:</span>
+              <span class="font-bold">₹${total.toFixed(2)}</span>
+            </div>
+            <div class="flex justify-between">
+              <span class="font-medium">Recipient Name:</span>
+              <span>${UPI_CONFIG.name}</span>
+            </div>
+            <div class="flex justify-between">
+              <span class="font-medium">Order ID:</span>
+              <span class="text-xs">ORD_${Date.now()}</span>
+            </div>
+          </div>
+        </div>
+        <p class="text-xs text-gray-500 mt-3 text-center">
+          Or scan this QR code with your UPI app:
+        </p>
+        <div class="flex justify-center mt-2">
+          <div class="bg-white p-4 rounded-lg border border-gray-300">
+            <!-- QR Code placeholder - you can generate actual QR code later -->
+            <div class="w-32 h-32 bg-gray-200 flex items-center justify-center text-gray-500 text-xs text-center">
+              QR Code<br/>Image
+            </div>
+          </div>
+        </div>
+        <p class="text-xs text-gray-500 mt-3">
+          After payment, click "I've Paid" to confirm your order.
+        </p>
+      </div>
+    `,
+    confirmButtonText: "I've Paid",
+    showCancelButton: true,
+    cancelButtonText: "Cancel",
+    confirmButtonColor: "#16a34a",
+    cancelButtonColor: "#dc2626",
+  });
+};
 
   const initiateUPIPayment = () => {
     if (!UPI_CONFIG.number) {
@@ -632,19 +798,20 @@ const placeOrder = async () => {
                   </div>
 
                   {/* Payment Information */}
-                  <div className="border-t pt-4">
-                    <h3 className="text-sm font-semibold text-gray-800 mb-2">Payment Method</h3>
-                    <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg">
-                      <p className="text-xs text-blue-800">
-                        Payment will be processed via Google Pay/UPI. You'll be redirected to complete the payment securely.
-                      </p>
-                      {UPI_CONFIG.number && (
-                        <p className="text-xs text-gray-600 mt-1">
-                          UPI ID: <strong>{UPI_CONFIG.number}</strong>
-                        </p>
-                      )}
-                    </div>
-                  </div>
+                {/* Payment Information */}
+<div className="border-t pt-4">
+  <h3 className="text-sm font-semibold text-gray-800 mb-2">Payment Method</h3>
+  <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg">
+    <p className="text-xs text-blue-800">
+      Payment will be processed via UPI. You can choose from Google Pay, PhonePe, Paytm or any UPI app.
+    </p>
+    {UPI_CONFIG.number && (
+      <p className="text-xs text-gray-600 mt-1">
+        UPI ID: <strong>{UPI_CONFIG.number}</strong>
+      </p>
+    )}
+  </div>
+</div>
                 </motion.div>
               )}
             </AnimatePresence>
