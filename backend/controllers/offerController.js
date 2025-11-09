@@ -2,7 +2,7 @@ import Offer from "../models/Offer.js";
 import Customer from "../models/Customer.js";
 import cloudinary from "../config/cloudinary.js";
 import stream from "stream";
-import { sendEmail } from "../utils/sendEmail.js";
+// import { sendEmail } from "../utils/sendEmail.js";
 
 export const createOffer = async (req, res) => {
   try {
@@ -31,19 +31,19 @@ export const createOffer = async (req, res) => {
       isActive: isActive !== undefined ? isActive : true,
     });
 
-    if (req.query.notify === "true") {
-      const subs = await Customer.findAll({ where: { wantsOffers: true }, attributes: ["email", "name"] });
-      const toList = subs.filter(s => !!s.email).map(s => s.email).join(",");
-      if (toList) {
-        const html = `
-          <div style="font-family: Arial, sans-serif; max-width: 600px; margin: auto;">
-            <h2>${title}</h2>
-            ${imagePath ? `<img src="${imagePath}" alt="Offer" style="max-width:100%;border-radius:8px;"/>` : ""}
-            <p>${description || ""}</p>
-          </div>`;
-        await sendEmail({ to: toList, subject: `New Offer: ${title}`, html });
-      }
-    }
+    // if (req.query.notify === "true") {
+    //   const subs = await Customer.findAll({ where: { wantsOffers: true }, attributes: ["email", "name"] });
+    //   const toList = subs.filter(s => !!s.email).map(s => s.email).join(",");
+    //   if (toList) {
+    //     const html = `
+    //       <div style="font-family: Arial, sans-serif; max-width: 600px; margin: auto;">
+    //         <h2>${title}</h2>
+    //         ${imagePath ? `<img src="${imagePath}" alt="Offer" style="max-width:100%;border-radius:8px;"/>` : ""}
+    //         <p>${description || ""}</p>
+    //       </div>`;
+    //     await sendEmail({ to: toList, subject: `New Offer: ${title}`, html });
+    //   }
+    // }
 
     res.status(201).json({ message: "Offer created", offer });
   } catch (e) {
