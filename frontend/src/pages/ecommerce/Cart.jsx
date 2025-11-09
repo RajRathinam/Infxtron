@@ -1,12 +1,12 @@
 import React, { useEffect, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Minus, Plus, Trash2, MapPin } from "lucide-react";
+import { Minus, Plus, Trash2, MapPin, MessageCircle, Upload } from "lucide-react";
 import axiosInstance from "../../utils/axiosConfig";
 import Swal from "sweetalert2";
 
 export default function Cart() {
   const [cartItems, setCartItems] = useState([]);
-  const [showPayment, setShowPayment] = useState(false);
+  const [showCustomerForm, setShowCustomerForm] = useState(false);
   const [customer, setCustomer] = useState({
     name: "",
     phone: "",
@@ -26,11 +26,8 @@ export default function Cart() {
     { id: "home_delivery", name: "Home Delivery", address: "Deliver to my address", freeDelivery: false, charge: 10 }
   ];
 
-  // Get UPI configuration from environment variables
-  const UPI_CONFIG = {
-    number: import.meta.env.VITE_BUSINESS_UPI_NUMBER, // Format: xxxxx@okicici
-    name: import.meta.env.VITE_BUSINESS_NAME || "AG's Healthy Food"
-  };
+  // WhatsApp number for payments
+  const WHATSAPP_NUMBER = import.meta.env.VITE_BUSINESS_WHATSAPP_NUMBER;
 
   useEffect(() => {
     const stored = JSON.parse(sessionStorage.getItem("cartItems")) || [];
@@ -61,422 +58,294 @@ export default function Cart() {
   const productTotal = cartItems.reduce((sum, item) => sum + item.price * item.quantity, 0);
   const total = productTotal + deliveryCharge;
 
-  const generateUPIPaymentLink = () => {
-    // Ensure amount is integer without decimals
-    const amountStr = Math.round(total).toString();
-    const encodedName = encodeURIComponent(UPI_CONFIG.name);
-    const note = `Order_${Date.now()}`;
-    
-    // Use PhonePe UPI link which is more reliable for small amounts
-    return `phonepe://pay?pa=${UPI_CONFIG.number}&pn=${encodedName}&am=${amountStr}&cu=INR&tn=${note}`;
-  };
-
-  const initiateUPIPayment = () => {
-    if (!UPI_CONFIG.number) {
-      Swal.fire({
-        icon: "error",
-        title: "UPI Not Configured",
-        text: "UPI payment is not available. Please contact support.",
-        confirmButtonColor: "#dc2626",
-      });
-      return false;
-    }
-
-    try {
-      const upiLink = generateUPIPaymentLink();
-      console.log("Opening UPI Link:", upiLink);
-      
-      // Try to open UPI app directly
-      window.location.href = upiLink;
-      
-      // Fallback after delay
-      setTimeout(() => {
-        // Alternative UPI link format
-        const amountStr = Math.round(total).toString();
-        const encodedName = encodeURIComponent(UPI_CONFIG.name);
-        const note = `Order_${Date.now()}`;
-        const fallbackLink = `upi://pay?pa=${UPI_CONFIG.number}&pn=${encodedName}&am=${amountStr}&cu=INR&tn=${note}`;
-        window.location.href = fallbackLink;
-      }, 500);
-      
-      return true;
-    } catch (error) {
-      console.error("Error opening UPI:", error);
-      
-      // Show UPI limit guidance
-      Swal.fire({
-        icon: "warning",
-        title: "UPI Payment Issue",
-        html: `
-          <div class="text-left">
-            <p class="text-sm">If you're facing UPI limit issues:</p>
-            <div class="mt-3 space-y-2 text-sm">
-              <div class="flex items-start gap-2">
-                <span class="text-green-600">•</span>
-                <span>Check your bank's daily UPI transaction limit</span>
-              </div>
-              <div class="flex items-start gap-2">
-                <span class="text-green-600">•</span>
-                <span>Ensure you haven't exceeded per transaction limit (usually ₹1-2 lakhs)</span>
-              </div>
-              <div class="flex items-start gap-2">
-                <span class="text-green-600">•</span>
-                <span>Try with a different UPI app (Google Pay, PhonePe, Paytm)</span>
-              </div>
-              <div class="flex items-start gap-2">
-                <span class="text-green-600">•</span>
-                <span>Contact your bank to increase UPI limits if needed</span>
-              </div>
-            </div>
-            <div class="mt-4 p-3 bg-yellow-50 border border-yellow-200 rounded">
-              <p class="text-xs font-semibold text-yellow-800">Manual Payment:</p>
-              <p class="text-lg font-bold text-green-600 text-center mt-2">${UPI_CONFIG.number}</p>
-              <p class="text-xs text-center mt-1">Amount: ₹${Math.round(total)}</p>
-            </div>
-          </div>
-        `,
-        confirmButtonText: "Try Again",
-        showCancelButton: true,
-        cancelButtonText: "Cancel",
-        confirmButtonColor: "#16a34a",
-        cancelButtonColor: "#dc2626",
-      }).then((result) => {
-        if (result.isConfirmed) {
-          initiateUPIPayment();
-        }
-      });
-      
-      return true;
-    }
-  };
-
-  const updatePaymentStatus = async (orderId, status) => {
-    try {
-      await axiosInstance.patch(`/api/orders/${orderId}/payment-status`, {
-        paymentStatus: status
-      });
-    } catch (err) {
-      console.error("Failed to update payment status:", err);
-    }
-  };
-
   const handleDeliveryPointChange = (pointId) => {
     setSelectedDeliveryPoint(pointId);
     const point = DELIVERY_POINTS.find(p => p.id === pointId);
     setDeliveryCharge(point?.freeDelivery ? 0 : (point?.charge || 0));
   };
 
-const placeOrder = async () => {
-  // Validate required fields
-  if (!customer.name || !customer.phone || !selectedDeliveryPoint) {
-    await Swal.fire({
-      icon: "warning",
-      title: "Incomplete Details",
-      text: "Please fill name, phone, and select delivery point to place order.",
-      confirmButtonColor: "#FF9800",
-    });
-    return;
-  }
+  const placeOrder = async () => {
+    // Validate required fields
+    if (!customer.name || !customer.phone || !selectedDeliveryPoint) {
+      await Swal.fire({
+        icon: "warning",
+        title: "Incomplete Details",
+        text: "Please fill name, phone, and select delivery point to place order.",
+        confirmButtonColor: "#FF9800",
+      });
+      return;
+    }
 
-  // Validate phone number
-  if (!/^\d{10}$/.test(customer.phone)) {
-    await Swal.fire({
-      icon: "warning",
-      title: "Invalid Phone",
-      text: "Please enter a valid 10-digit phone number.",
-      confirmButtonColor: "#FF9800",
-    });
-    return;
-  }
+    // Validate phone number
+    if (!/^\d{10}$/.test(customer.phone)) {
+      await Swal.fire({
+        icon: "warning",
+        title: "Invalid Phone",
+        text: "Please enter a valid 10-digit phone number.",
+        confirmButtonColor: "#FF9800",
+      });
+      return;
+    }
 
-  // Validate home delivery address
-  if (selectedDeliveryPoint === 'home_delivery' && !customer.address.trim()) {
-    await Swal.fire({
-      icon: "warning",
-      title: "Address Required",
-      text: "Please enter your delivery address for home delivery.",
-      confirmButtonColor: "#FF9800",
-    });
-    return;
-  }
+    // Validate home delivery address
+    if (selectedDeliveryPoint === 'home_delivery' && !customer.address.trim()) {
+      await Swal.fire({
+        icon: "warning",
+        title: "Address Required",
+        text: "Please enter your delivery address for home delivery.",
+        confirmButtonColor: "#FF9800",
+      });
+      return;
+    }
 
-  // Validate UPI configuration
-  if (!UPI_CONFIG.number) {
-    await Swal.fire({
-      icon: "error",
-      title: "Payment Unavailable",
-      text: "Payment is currently unavailable. Please contact support.",
-      confirmButtonColor: "#dc2626",
-    });
-    return;
-  }
+    const selectedPoint = DELIVERY_POINTS.find(p => p.id === selectedDeliveryPoint);
+    const finalAddress = selectedPoint.id === 'home_delivery' 
+      ? customer.address 
+      : `${selectedPoint.name}, ${selectedPoint.address}`;
 
-  // Check if amount is too small (some UPI apps have minimum amount restrictions)
-  if (total < 1) {
-    await Swal.fire({
-      icon: "warning",
-      title: "Minimum Amount Required",
-      text: "Minimum payment amount is ₹1. Please add more items to your cart.",
-      confirmButtonColor: "#FF9800",
-    });
-    return;
-  }
+    const orderId = `ORD_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    
+    const payload = {
+      name: customer.name,
+      phone: customer.phone,
+      email: customer.email || undefined,
+      address: finalAddress,
+      wantsOffers: customer.wantsOffers,
+      products: cartItems.map((ci) => ({
+        productId: ci.id || ci._id,
+        productName: ci.productName,
+        quantity: ci.quantity,
+        price: ci.price,
+        orderType: ci.orderType,
+        packName: ci.packName,
+      })),
+      totalPrice: Math.round(total),
+      deliveryPoint: selectedDeliveryPoint,
+      deliveryCharge: deliveryCharge,
+      transactionId: orderId,
+    };
 
-  const selectedPoint = DELIVERY_POINTS.find(p => p.id === selectedDeliveryPoint);
-  const finalAddress = selectedPoint.id === 'home_delivery' 
-    ? customer.address 
-    : `${selectedPoint.name}, ${selectedPoint.address}`;
+    setPlacingOrder(true);
+    
+    try {
+      // Save order to database
+      const orderRes = await axiosInstance.post("/api/orders", payload, {
+        withCredentials: true,
+      });
 
-  // Generate order ID upfront for reference
-  const orderId = `ORD_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-  
-  const payload = {
-    id: orderId, // Use our generated ID for reference
-    name: customer.name,
-    phone: customer.phone,
-    email: customer.email || undefined,
-    address: finalAddress,
-    wantsOffers: customer.wantsOffers,
-    products: cartItems.map((ci) => ({
-      productId: ci.id || ci._id,
-      productName: ci.productName,
-      quantity: ci.quantity,
-      price: ci.price,
-      orderType: ci.orderType,
-      packName: ci.packName,
-    })),
-    totalPrice: Math.round(total),
-    deliveryPoint: selectedDeliveryPoint,
-    deliveryCharge: deliveryCharge,
-    transactionId: `TXN_${Date.now()}`,
-    paymentMethod: "upi",
-    paymentStatus: "pending", // Start with pending status
-  };
+      if (!(orderRes.status === 200 || orderRes.status === 201)) {
+        throw new Error("Order placement failed");
+      }
 
-  setPlacingOrder(true);
-  
-  try {
-    // Show payment confirmation first with UPI guidance
-    const paymentConfirmed = await Swal.fire({
-      icon: "info",
-      title: "Proceed to Payment",
-      html: `
-        <div class="text-left">
-          <p class="font-semibold">Order Summary:</p>
-          <div class="mt-2 space-y-1 text-sm">
-            <div class="flex justify-between">
-              <span>Products:</span>
-              <span>₹${Math.round(productTotal)}</span>
+      console.log("Order placed successfully, ID:", orderId);
+
+      // Format product details for display
+      const productDetails = cartItems.map(item => {
+        const orderType = item.orderType || "singleOrder";
+        const typeLabel = 
+          orderType === "weeklySubscription" ? "Weekly Plan" :
+          orderType === "monthlySubscription" ? "Monthly Plan" : "Single Order";
+        
+        return `• ${item.productName} (${typeLabel}) - Qty: ${item.quantity} - ₹${item.price}`;
+      }).join('\n');
+
+      // Show comprehensive payment instructions
+await Swal.fire({
+  icon: "success",
+  title: "Order Placed Successfully!",
+  html: `
+    <div class="text-left space-y-4">
+      <div class="bg-green-50 border border-green-200 rounded-lg p-4">
+        <h3 class="font-bold text-green-800 text-lg mb-3">📦 Order Confirmed!</h3>
+        <p class="text-sm text-green-700">Your order has been received and is being processed.</p>
+      </div>
+
+      <div class="bg-blue-50 border border-blue-200 rounded-lg p-4">
+        <h3 class="font-bold text-blue-800 text-lg mb-3">💳 Payment Instructions</h3>
+        
+        <div class="space-y-3 text-sm">
+          <div class="flex justify-between">
+            <span class="font-semibold">Payment Method:</span>
+            <span class="text-blue-600">UPI Payment (Any App)</span>
+          </div>
+          
+          <div class="flex justify-between">
+            <span class="font-semibold">Amount to Pay:</span>
+            <span class="font-bold text-green-600">₹${total}</span>
+          </div>
+          
+          <div class="flex justify-between items-start">
+            <span class="font-semibold">UPI ID:</span>
+            <span class="font-mono text-blue-600 text-right">${WHATSAPP_NUMBER}</span>
+          </div>
+
+          <div class="mt-3 p-3 bg-yellow-50 border border-yellow-200 rounded">
+            <p class="text-xs text-yellow-800 font-semibold mb-2">📱 How to Pay:</p>
+            <ol class="text-xs text-yellow-700 space-y-1 list-decimal list-inside">
+              <li>Open <strong>GPay, PhonePe, Paytm</strong> or any UPI app</li>
+              <li>Send payment to UPI ID: <strong class="font-mono">${WHATSAPP_NUMBER}</strong></li>
+              <li>Take screenshot of successful payment</li>
+              <li>Share screenshot on WhatsApp for verification</li>
+            </ol>
+          </div>
+
+          <div class="p-3 bg-purple-50 border border-purple-200 rounded">
+            <p class="text-xs text-purple-800 font-semibold">💡 Supported UPI Apps:</p>
+            <div class="flex justify-around mt-2">
+              <span class="text-xs font-semibold text-purple-700">GPay</span>
+              <span class="text-xs font-semibold text-purple-700">PhonePe</span>
+              <span class="text-xs font-semibold text-purple-700">Paytm</span>
+              <span class="text-xs font-semibold text-purple-700">BHIM</span>
             </div>
-            ${deliveryCharge > 0 ? `
-              <div class="flex justify-between">
-                <span>Delivery Charge:</span>
-                <span>₹${Math.round(deliveryCharge)}</span>
-              </div>
-            ` : ''}
-            <div class="flex justify-between border-t border-gray-300 pt-1 font-bold">
+          </div>
+        </div>
+      </div>
+
+      <div class="bg-gray-50 border border-gray-200 rounded-lg p-4">
+        <h3 class="font-bold text-gray-800 text-lg mb-3">📋 Order Summary</h3>
+        <div class="space-y-2 text-sm">
+          <div class="flex justify-between">
+            <span>Order ID:</span>
+            <span class="font-mono">${orderId}</span>
+          </div>
+          <div class="flex justify-between">
+            <span>Customer Name:</span>
+            <span>${customer.name}</span>
+          </div>
+          <div class="flex justify-between">
+            <span>Delivery Point:</span>
+            <span>${selectedPoint.name}</span>
+          </div>
+          <div class="border-t pt-2 mt-2">
+            <div class="flex justify-between font-semibold">
               <span>Total Amount:</span>
-              <span class="text-orange-600">₹${Math.round(total)}</span>
+              <span class="text-green-600">₹${total}</span>
             </div>
           </div>
-          <div class="mt-3 p-2 bg-blue-50 border border-blue-200 rounded text-xs">
-            <p class="font-semibold text-blue-800">UPI Payment Tips:</p>
-            <ul class="mt-1 space-y-1 text-blue-700">
-              <li>• Ensure sufficient balance in your bank account</li>
-              <li>• Check your UPI transaction limits</li>
-              <li>• Use UPI PIN to complete payment</li>
-            </ul>
+        </div>
+      </div>
+
+      <div class="bg-orange-50 border border-orange-200 rounded-lg p-4">
+        <h3 class="font-bold text-orange-800 text-lg mb-3">📸 Share Screenshot on WhatsApp</h3>
+        <p class="text-sm text-orange-700">
+          After payment, please share the screenshot on WhatsApp to 
+          <strong> ${WHATSAPP_NUMBER}</strong> for quick verification and order confirmation.
+        </p>
+      </div>
+    </div>
+  `,
+  showCancelButton: true,
+  confirmButtonText: "Share Screenshot on WhatsApp",
+  cancelButtonText: "I'll Pay Later",
+  confirmButtonColor: "#25D366",
+  cancelButtonColor: "#6b7280",
+  width: 600,
+}).then(async (result) => {
+  if (result.isConfirmed) {
+    // Open WhatsApp for sharing screenshot
+    const whatsappMessage = encodeURIComponent(
+      `Payment Screenshot for Order #${orderId}\n\nCustomer: ${customer.name}\nOrder Amount: ₹${total}\n\nPlease find the payment screenshot attached.`
+    );
+    
+    // Open WhatsApp with pre-filled message
+    window.open(`https://wa.me/${WHATSAPP_NUMBER}?text=${whatsappMessage}`, '_blank');
+    
+    // Show instructions for sharing screenshot
+    await Swal.fire({
+      icon: "info",
+      title: "Share Screenshot on WhatsApp",
+      html: `
+        <div class="text-center space-y-3">
+          <div class="bg-green-50 border border-green-200 rounded-lg p-3">
+            <p class="text-sm text-green-700 font-semibold">WhatsApp has been opened!</p>
           </div>
-          <p class="mt-3 text-sm">Click "Pay Now" to complete payment via UPI.</p>
+          <div class="bg-blue-50 border border-blue-200 rounded-lg p-3">
+            <p class="text-xs text-blue-700">Please share your payment screenshot with this message:</p>
+            <p class="text-xs font-mono bg-white p-2 rounded border mt-2">
+              Payment Screenshot for Order #${orderId}
+            </p>
+          </div>
+          <div class="bg-yellow-50 border border-yellow-200 rounded-lg p-3">
+            <p class="text-xs text-yellow-700">
+              <strong>Steps to share screenshot:</strong><br>
+              1. Take screenshot of successful payment<br>
+              2. Go to WhatsApp chat<br>
+              3. Attach the screenshot<br>
+              4. Send the message
+            </p>
+          </div>
         </div>
       `,
-      showCancelButton: true,
-      confirmButtonText: "Pay Now",
-      cancelButtonText: "Cancel",
-      confirmButtonColor: "#16a34a",
-      cancelButtonColor: "#dc2626",
+      confirmButtonText: "Got it!",
+      confirmButtonColor: "#25D366",
     });
-
-    if (!paymentConfirmed.isConfirmed) {
-      // User cancelled before payment
-      await Swal.fire({
-        icon: "info",
-        title: "Payment Cancelled",
-        text: "You can complete your order anytime from the cart.",
-        confirmButtonColor: "#6b7280",
-      });
-      setPlacingOrder(false);
-      return;
-    }
-
-    // Initiate UPI payment
-    const paymentInitiated = initiateUPIPayment();
-    
-    if (!paymentInitiated) {
-      await Swal.fire({
-        icon: "error",
-        title: "Payment Failed",
-        text: "Could not process payment. Please try again.",
-        confirmButtonColor: "#dc2626",
-      });
-      setPlacingOrder(false);
-      return;
-    }
-
-    // Wait a moment for UPI app to open, then ask for confirmation
-    setTimeout(async () => {
-      const paymentResult = await Swal.fire({
-        icon: "question",
-        title: "Payment Confirmation",
-        html: `
-          <div class="text-left">
-            <p class="text-sm">Did you complete the payment of <strong>₹${Math.round(total)}</strong>?</p>
-            <div class="mt-2 p-2 bg-gray-50 rounded text-xs">
-              <p><strong>UPI ID:</strong> ${UPI_CONFIG.number}</p>
-              <p><strong>Order ID:</strong> ${orderId}</p>
-            </div>
-            <p class="text-xs text-gray-500 mt-2">Please check your UPI app for payment confirmation.</p>
-            <div class="mt-3 p-2 bg-yellow-50 border border-yellow-200 rounded text-xs">
-              <p class="text-yellow-700">If payment failed due to bank limits, please contact your bank or try with a different UPI app.</p>
+  } else {
+    // User chose to pay later - show reminder
+    await Swal.fire({
+      icon: "info",
+      title: "Payment Pending",
+      html: `
+        <div class="text-center space-y-3">
+          <div class="bg-blue-50 border border-blue-200 rounded-lg p-3">
+            <p class="text-blue-600 font-semibold">Remember to complete your payment!</p>
+          </div>
+          <div class="bg-gray-50 border border-gray-200 rounded-lg p-3">
+            <p class="text-sm text-gray-700"><strong>Payment Details:</strong></p>
+            <div class="text-left space-y-1 mt-2">
+              <div class="flex justify-between text-xs">
+                <span>Amount:</span>
+                <span class="font-bold">₹${total}</span>
+              </div>
+              <div class="flex justify-between text-xs">
+                <span>UPI ID:</span>
+                <span class="font-mono">${WHATSAPP_NUMBER}</span>
+              </div>
+              <div class="flex justify-between text-xs">
+                <span>Order ID:</span>
+                <span class="font-mono">${orderId}</span>
+              </div>
             </div>
           </div>
-        `,
-        showCancelButton: true,
-        confirmButtonText: "Yes, Payment Done",
-        cancelButtonText: "Payment Failed",
-        confirmButtonColor: "#16a34a",
-        cancelButtonColor: "#dc2626",
-        allowOutsideClick: false,
-      });
-
-      if (paymentResult.isConfirmed) {
-        // Payment completed - NOW send data to backend
-        try {
-          // Update payload with completed status
-          const completedPayload = {
-            ...payload,
-            paymentStatus: "completed"
-          };
-
-          const orderRes = await axiosInstance.post("/api/orders", completedPayload, {
-            withCredentials: true,
-          });
-
-          if (!(orderRes.status === 200 || orderRes.status === 201)) {
-            throw new Error("Order placement failed");
-          }
-
-          console.log("Order placed successfully, ID:", orderId);
-
-          {/* Commented email functionality
-          // TRIGGER ORDER EMAIL - Get the actual database order ID from response
-          const dbOrderId = orderRes.data.order?.id || orderRes.data.id;
-          if (dbOrderId) {
-            try {
-              console.log("Triggering order email for order ID:", dbOrderId);
-              await axiosInstance.post(`/api/orders/${dbOrderId}/send-email`, {}, {
-                withCredentials: true,
-              });
-              console.log("Order email triggered successfully");
-            } catch (emailError) {
-              console.error("Failed to trigger order email:", emailError);
-              // Don't fail the entire order if email fails
-            }
-          }
-          */}
-
-          await Swal.fire({
-            icon: "success",
-            title: "Order Confirmed!",
-            html: `
-              <div class="text-left">
-                <p>Thank you for your payment!</p>
-                <p class="text-sm text-gray-600 mt-2">Your order has been confirmed and will be delivered soon.</p>
-                <div class="mt-3 p-3 bg-green-50 rounded border border-green-200">
-                  <p class="text-xs font-semibold text-green-800">Order Details:</p>
-                  <p class="text-xs mt-1"><strong>Order ID:</strong> ${orderId}</p>
-                  <p class="text-xs"><strong>Delivery:</strong> ${selectedPoint.name}</p>
-                  <p class="text-xs"><strong>Total Paid:</strong> ₹${Math.round(total)}</p>
-                </div>
-              </div>
-            `,
-            confirmButtonColor: "#16a34a",
-            timer: 8000,
-          });
-
-          // Clear cart and reset form
-          sessionStorage.removeItem("cartItems");
-          setCartItems([]);
-          setShowPayment(false);
-          setCustomer({
-            name: "",
-            phone: "",
-            email: "",
-            address: "",
-            wantsOffers: false,
-          });
-          setSelectedDeliveryPoint("");
-          setDeliveryCharge(0);
-
-        } catch (err) {
-          console.error("Failed to save completed order:", err);
-          
-          await Swal.fire({
-            icon: "error",
-            title: "Order Save Failed",
-            html: `
-              <div class="text-left">
-                <p>Payment was successful but we couldn't save your order.</p>
-                <p class="text-sm text-gray-600 mt-2">Please contact support with your order ID:</p>
-                <p class="text-xs font-bold mt-1">${orderId}</p>
-                <p class="text-xs text-gray-500 mt-2">Amount: ₹${Math.round(total)}</p>
-              </div>
-            `,
-            confirmButtonColor: "#dc2626",
-          });
-        }
-
-      } else {
-        // Payment failed or cancelled - DO NOT send to backend
-        await Swal.fire({
-          icon: "info",
-          title: "Payment Not Completed",
-          html: `
-            <div class="text-left">
-              <p>Payment was not completed.</p>
-              <p class="text-sm text-gray-600 mt-2">Your order has not been placed. You can try again anytime.</p>
-              <p class="text-xs text-gray-500 mt-2">Reference ID: <strong>${orderId}</strong></p>
-              <div class="mt-2 p-2 bg-blue-50 border border-blue-200 rounded text-xs">
-                <p class="text-blue-700">If you faced UPI limit issues, please:</p>
-                <ul class="mt-1 space-y-1 text-blue-600">
-                  <li>• Check your bank's UPI transaction limits</li>
-                  <li>• Try with a different UPI app</li>
-                  <li>• Contact your bank to increase limits</li>
-                </ul>
-              </div>
-            </div>
-          `,
-          confirmButtonColor: "#6b7280",
-        });
-      }
-      
-      setPlacingOrder(false);
-      
-    }, 2000);
-
-  } catch (err) {
-    console.error("Payment process failed:", err);
-    
-    await Swal.fire({
-      icon: "error",
-      title: "Process Failed",
-      text: "Something went wrong. Please try again.",
-      confirmButtonColor: "#FF3B30",
+          <div class="bg-green-50 border border-green-200 rounded-lg p-3">
+            <p class="text-xs text-green-700">
+              After payment, share screenshot on WhatsApp to <strong>${WHATSAPP_NUMBER}</strong>
+            </p>
+          </div>
+        </div>
+      `,
+      confirmButtonColor: "#25D366",
     });
-    
-    setPlacingOrder(false);
   }
-};
+});
+
+      // Clear cart and reset form
+      sessionStorage.removeItem("cartItems");
+      setCartItems([]);
+      setShowCustomerForm(false);
+      setCustomer({
+        name: "",
+        phone: "",
+        email: "",
+        address: "",
+        wantsOffers: false,
+      });
+      setSelectedDeliveryPoint("");
+      setDeliveryCharge(0);
+
+    } catch (err) {
+      console.error("Failed to place order:", err);
+      
+      await Swal.fire({
+        icon: "error",
+        title: "Order Failed",
+        text: "Failed to place order. Please try again.",
+        confirmButtonColor: "#dc2626",
+      });
+    } finally {
+      setPlacingOrder(false);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-gradient-to-b from-green-50 to-white py-10 px-5 md:px-10">
       <div className="max-w-4xl mx-auto bg-white rounded-2xl shadow-lg p-4 md:p-8">
@@ -558,7 +427,7 @@ const placeOrder = async () => {
                         </div>
 
                         <span className="font-bold text-gray-900 text-sm md:text-base w-20 text-right">
-                          ₹{Math.round(item.price * item.quantity)}
+                          ₹{(item.price * item.quantity).toFixed(2)}
                         </span>
                       </div>
                     </div>
@@ -571,22 +440,22 @@ const placeOrder = async () => {
             <div className="mt-6 space-y-2 border-t border-gray-300 pt-4">
               <div className="flex justify-between text-sm">
                 <span>Products Total:</span>
-                <span>₹{Math.round(productTotal)}</span>
+                <span>₹{productTotal.toFixed(2)}</span>
               </div>
               {deliveryCharge > 0 && (
                 <div className="flex justify-between text-sm">
                   <span>Delivery Charge:</span>
-                  <span>₹{Math.round(deliveryCharge)}</span>
+                  <span>₹{deliveryCharge.toFixed(2)}</span>
                 </div>
               )}
               <div className="flex justify-between text-lg font-bold border-t border-gray-300 pt-2">
                 <span>Total Amount:</span>
-                <span className="text-orange-600">₹{Math.round(total)}</span>
+                <span className="text-orange-600">₹{total.toFixed(2)}</span>
               </div>
             </div>
 
             <AnimatePresence>
-              {showPayment && (
+              {showCustomerForm && (
                 <motion.div
                   initial={{ opacity: 0, y: 20 }}
                   animate={{ opacity: 1, y: 0 }}
@@ -685,19 +554,15 @@ const placeOrder = async () => {
 
                   {/* Payment Information */}
                   <div className="border-t pt-4">
-                    <h3 className="text-sm font-semibold text-gray-800 mb-2">Payment Method</h3>
-                    <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg">
-                      <p className="text-xs text-blue-800">
-                        Payment will be processed via UPI. You'll be redirected to your UPI app to complete the payment.
+                    <h3 className="text-sm font-semibold text-gray-800 mb-2 flex items-center gap-2">
+                      <MessageCircle size={16} className="text-green-600" />
+                      Payment Method
+                    </h3>
+                    <div className="p-3 bg-green-50 border border-green-200 rounded-lg">
+                      <p className="text-xs text-green-800">
+                        After placing order, you'll receive complete payment instructions.
+                        You'll need to send payment via WhatsApp and upload the screenshot for verification.
                       </p>
-                      {UPI_CONFIG.number && (
-                        <p className="text-xs text-gray-600 mt-1">
-                          UPI ID: <strong>{UPI_CONFIG.number}</strong>
-                        </p>
-                      )}
-                      <div className="mt-2 p-2 bg-yellow-50 border border-yellow-200 rounded text-xs">
-                        <p className="text-yellow-700">Note: Ensure you haven't exceeded your bank's UPI transaction limits.</p>
-                      </div>
                     </div>
                   </div>
                 </motion.div>
@@ -705,35 +570,30 @@ const placeOrder = async () => {
             </AnimatePresence>
 
             <div className="mt-8 text-center">
-              {!showPayment ? (
+              {!showCustomerForm ? (
                 <motion.button
-                  onClick={() => setShowPayment(true)}
+                  onClick={() => setShowCustomerForm(true)}
                   initial={{ opacity: 0, y: 20 }}
                   animate={{ opacity: 1, y: 0 }}
                   whileHover={{ scale: 1.03 }}
                   className="bg-orange-500 hover:bg-orange-600 text-white px-8 py-2.5 text-sm md:text-base rounded-lg font-semibold shadow-md transition-all duration-300"
                 >
-                  Proceed to Payment
+                  Place Order
                 </motion.button>
               ) : (
                 <motion.button
                   onClick={placeOrder}
-                  disabled={placingOrder || !UPI_CONFIG.number}
+                  disabled={placingOrder}
                   initial={{ opacity: 0, y: 20 }}
                   animate={{ opacity: 1, y: 0 }}
                   whileHover={{ scale: placingOrder ? 1 : 1.05 }}
                   className={`px-8 py-2.5 text-sm md:text-base rounded-lg font-semibold shadow-md transition-all duration-300 ${
-                    placingOrder || !UPI_CONFIG.number
+                    placingOrder
                       ? "bg-gray-400 cursor-not-allowed text-white" 
                       : "bg-green-500 hover:bg-green-600 text-white"
                   }`}
                 >
-                  {placingOrder 
-                    ? "Processing..." 
-                    : !UPI_CONFIG.number
-                      ? "Payment Unavailable"
-                      : `Pay ₹${Math.round(total)} via UPI`
-                  }
+                  {placingOrder ? "Placing Order..." : `Confirm Order - ₹${total.toFixed(2)}`}
                 </motion.button>
               )}
             </div>

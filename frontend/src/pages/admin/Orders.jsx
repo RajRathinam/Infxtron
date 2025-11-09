@@ -4,7 +4,6 @@ import {
   Package,
   User,
   MapPin,
-  Clock,
   ShoppingBag,
   Phone,
   Mail,
@@ -18,6 +17,7 @@ import {
   Truck,
   Home,
   Building,
+  MessageCircle,
 } from "lucide-react";
 import axiosInstance from "../../utils/axiosConfig";
 import Swal from "sweetalert2";
@@ -28,6 +28,10 @@ const Orders = () => {
   const [loading, setLoading] = useState(false);
   const [updatingStatus, setUpdatingStatus] = useState({});
   const [deleting, setDeleting] = useState({});
+  const [updatingPayment, setUpdatingPayment] = useState({});
+
+  // WhatsApp number for payments
+  const WHATSAPP_NUMBER = import.meta.env.VITE_BUSINESS_WHATSAPP_NUMBER || "919876543210";
 
   // Delivery points mapping
   const DELIVERY_POINTS = {
@@ -86,6 +90,33 @@ const Orders = () => {
     }
   };
 
+  // ✅ Update payment status
+  const updatePaymentStatus = async (id, paymentStatus) => {
+    setUpdatingPayment((prev) => ({ ...prev, [id]: true }));
+    try {
+      const res = await axiosInstance.patch(`/api/orders/${id}/payment-status`, { paymentStatus });
+      setOrders((prev) =>
+        prev.map((order) =>
+          order.id === id ? { ...order, paymentStatus: res.data.paymentStatus || paymentStatus } : order
+        )
+      );
+      Swal.fire({
+        icon: "success",
+        title: "Payment Status Updated",
+        text: `Payment status updated to ${paymentStatus}`,
+      });
+    } catch (err) {
+      console.error("Failed to update payment status:", err);
+      Swal.fire({
+        icon: "error",
+        title: "Update Failed",
+        text: err.response?.data?.message || err.message,
+      });
+    } finally {
+      setUpdatingPayment((prev) => ({ ...prev, [id]: false }));
+    }
+  };
+
   // ✅ Delete order
   const deleteOrder = async (id) => {
     const confirm = await Swal.fire({
@@ -120,6 +151,145 @@ const Orders = () => {
     } finally {
       setDeleting((prev) => ({ ...prev, [id]: false }));
     }
+  };
+
+  // ✅ Open WhatsApp with payment request message
+  const sendPaymentRequest = (order) => {
+    const productDetails = order.products?.map(p => {
+      const orderType = p.orderType || "singleOrder";
+      const typeLabel = 
+        orderType === "weeklySubscription" ? "Weekly Plan" :
+        orderType === "monthlySubscription" ? "Monthly Plan" : "Single Order";
+      
+      return `• ${p.productName} (${typeLabel}) - Qty: ${p.quantity} - ₹${p.price}`;
+    }).join('\n');
+
+    const whatsappNumber = order.Customer?.phone;
+    
+    if (!whatsappNumber) {
+      Swal.fire({
+        icon: "error",
+        title: "No Phone Number",
+        text: "Customer phone number not available",
+      });
+      return;
+    }
+
+    const message = encodeURIComponent(
+      `Hello ${order.Customer?.name},\n\nYour order from AG's Healthy Food is confirmed!\n\n📦 *Order Details:*\n${productDetails}\n\n💰 *Total Amount: ₹${order.totalPrice}*\n📍 *Delivery Address:* ${order.deliveryAddress}\n\n💳 *Payment Instructions:*\nPlease send payment of ₹${order.totalPrice} to ${WHATSAPP_NUMBER} and share the payment screenshot for confirmation.\n\nOnce we verify your payment, we'll process your order for delivery.`
+    );
+
+    window.open(`https://wa.me/91${whatsappNumber}?text=${message}`, '_blank');
+  };
+
+  // ✅ Open WhatsApp with payment confirmation message
+  const sendPaymentConfirmation = (order) => {
+    const whatsappNumber = order.Customer?.phone;
+    
+    if (!whatsappNumber) {
+      Swal.fire({
+        icon: "error",
+        title: "No Phone Number",
+        text: "Customer phone number not available",
+      });
+      return;
+    }
+
+    const message = encodeURIComponent(
+      `Hello ${order.Customer?.name},\n\nThank you for your payment! Your payment of ₹${order.totalPrice} has been verified.\n\nYour order has been confirmed and will be delivered to:\n${order.deliveryAddress}\n\nWe'll notify you when your order is out for delivery. Thank you for choosing AG's Healthy Food! 🥗`
+    );
+
+    window.open(`https://wa.me/91${whatsappNumber}?text=${message}`, '_blank');
+  };
+
+  // ✅ Open WhatsApp with order taken message
+  const sendOrderTakenMessage = (order) => {
+    const whatsappNumber = order.Customer?.phone;
+    
+    if (!whatsappNumber) {
+      Swal.fire({
+        icon: "error",
+        title: "No Phone Number",
+        text: "Customer phone number not available",
+      });
+      return;
+    }
+
+    const message = encodeURIComponent(
+      `Hello ${order.Customer?.name},\n\nYour order has been taken and we're preparing it for you! 🎉\n\nWe'll deliver it to:\n${order.deliveryAddress}\n\nThank you for choosing AG's Healthy Food!`
+    );
+
+    window.open(`https://wa.me/91${whatsappNumber}?text=${message}`, '_blank');
+  };
+
+  // ✅ Open WhatsApp with order shipped message
+  const sendOrderShippedMessage = (order) => {
+    const whatsappNumber = order.Customer?.phone;
+    
+    if (!whatsappNumber) {
+      Swal.fire({
+        icon: "error",
+        title: "No Phone Number",
+        text: "Customer phone number not available",
+      });
+      return;
+    }
+
+    const message = encodeURIComponent(
+      `Hello ${order.Customer?.name},\n\nGreat news! Your order is out for delivery! 🚚\n\nIt should reach you shortly at:\n${order.deliveryAddress}\n\nThank you for choosing AG's Healthy Food!`
+    );
+
+    window.open(`https://wa.me/91${whatsappNumber}?text=${message}`, '_blank');
+  };
+
+  // ✅ Open WhatsApp with order delivered message
+  const sendOrderDeliveredMessage = (order) => {
+    const whatsappNumber = order.Customer?.phone;
+    
+    if (!whatsappNumber) {
+      Swal.fire({
+        icon: "error",
+        title: "No Phone Number",
+        text: "Customer phone number not available",
+      });
+      return;
+    }
+
+    const message = encodeURIComponent(
+      `Hello ${order.Customer?.name},\n\nYour order has been successfully delivered! 🎊\n\nWe hope you enjoy your healthy meal from AG's Healthy Food!\n\nThank you for your order and we look forward to serving you again soon!`
+    );
+
+    window.open(`https://wa.me/91${whatsappNumber}?text=${message}`, '_blank');
+  };
+
+  // ✅ Open WhatsApp with custom message
+  const sendCustomMessage = (order) => {
+    const whatsappNumber = order.Customer?.phone;
+    
+    if (!whatsappNumber) {
+      Swal.fire({
+        icon: "error",
+        title: "No Phone Number",
+        text: "Customer phone number not available",
+      });
+      return;
+    }
+
+    Swal.fire({
+      title: 'Send Custom WhatsApp Message',
+      input: 'textarea',
+      inputLabel: 'Enter your message',
+      inputPlaceholder: 'Type your message here...',
+      showCancelButton: true,
+      confirmButtonText: 'Send via WhatsApp',
+      cancelButtonText: 'Cancel',
+      confirmButtonColor: '#25D366',
+    }).then((result) => {
+      if (result.isConfirmed && result.value) {
+        const message = encodeURIComponent(result.value);
+        window.open(`https://wa.me/91${whatsappNumber}?text=${message}`, '_blank');
+      }
+    });
   };
 
   const toggleOrder = (id) => {
@@ -158,7 +328,7 @@ const Orders = () => {
     switch (status) {
       case 'order delivered': return 'bg-green-600 text-white';
       case 'order shipped': return 'bg-blue-500 text-white';
-      case 'order taken': return 'bg-yellow-400 text-white';
+      case 'order taken': return 'bg-yellow-500 text-white';
       default: return 'bg-gray-400 text-white';
     }
   };
@@ -249,7 +419,7 @@ const Orders = () => {
                       {/* Payment Status */}
                       <span className={`px-2 py-1 rounded-full text-xs font-medium flex items-center gap-1 ${getPaymentStatusColor(order.paymentStatus)}`}>
                         {getPaymentMethodIcon(order.paymentMethod)}
-                        {order.paymentMethod === 'upi' ? 'UPI' : 'Cash'} • {order.paymentStatus}
+                        {order.paymentMethod === 'upi' ? 'UPI' : 'WhatsApp'} • {order.paymentStatus}
                       </span>
 
                       {/* Delivery Point */}
@@ -267,21 +437,36 @@ const Orders = () => {
                       )}
                     </div>
 
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        deleteOrder(order.id);
-                      }}
-                      className="text-red-500 hover:text-red-600 transition p-1 rounded hover:bg-red-50"
-                      disabled={deleting[order.id]}
-                      title="Delete order"
-                    >
-                      {deleting[order.id] ? (
-                        <div className="w-5 h-5 border-2 border-red-500 border-t-transparent rounded-full animate-spin" />
-                      ) : (
-                        <Trash2 size={18} />
-                      )}
-                    </button>
+                    <div className="flex items-center gap-2">
+                      {/* WhatsApp Button */}
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          sendPaymentRequest(order);
+                        }}
+                        className="text-green-500 hover:text-green-600 transition p-1 rounded hover:bg-green-50"
+                        title="Send WhatsApp payment request"
+                      >
+                        <MessageCircle size={18} />
+                      </button>
+
+                      {/* Delete Button */}
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          deleteOrder(order.id);
+                        }}
+                        className="text-red-500 hover:text-red-600 transition p-1 rounded hover:bg-red-50"
+                        disabled={deleting[order.id]}
+                        title="Delete order"
+                      >
+                        {deleting[order.id] ? (
+                          <div className="w-5 h-5 border-2 border-red-500 border-t-transparent rounded-full animate-spin" />
+                        ) : (
+                          <Trash2 size={18} />
+                        )}
+                      </button>
+                    </div>
                   </div>
                 </div>
 
@@ -334,8 +519,8 @@ const Orders = () => {
                             <div className="flex justify-between">
                               <span className="text-gray-600">Method:</span>
                               <span className="font-medium flex items-center gap-1">
-                                {getPaymentMethodIcon(order.paymentMethod)}
-                                {order.paymentMethod === 'upi' ? 'UPI Payment' : 'Cash on Delivery'}
+                                <MessageCircle size={14} className="text-green-600" />
+                                WhatsApp Payment
                               </span>
                             </div>
                             <div className="flex justify-between">
@@ -346,12 +531,43 @@ const Orders = () => {
                             </div>
                             <div className="flex justify-between">
                               <span className="text-gray-600">Total Amount:</span>
-                              <span className="font-bold text-green-600 flex items-center gap-1">
+                              <span className="font-bold text-green-600 flex items-center">
                                 <IndianRupee size={14} />
                                 {order.totalPrice}
                               </span>
                             </div>
                           </div>
+
+                          {/* Payment Action Buttons */}
+                          {order.paymentStatus === 'pending' && (
+                            <div className="mt-3 pt-3 border-t border-gray-200">
+                              <button
+                                onClick={() => updatePaymentStatus(order.id, 'completed')}
+                                disabled={updatingPayment[order.id]}
+                                className="w-full bg-green-500 hover:bg-green-600 text-white py-2 px-3 rounded-lg text-xs font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                              >
+                                {updatingPayment[order.id] ? 'Updating...' : 'Mark Payment as Completed'}
+                              </button>
+                              <p className="text-xs text-gray-500 mt-1 text-center">
+                                Click after verifying payment screenshot
+                              </p>
+                            </div>
+                          )}
+
+                          {order.paymentStatus === 'completed' && (
+                            <div className="mt-3 pt-3 border-t border-gray-200">
+                              <button
+                                onClick={() => sendPaymentConfirmation(order)}
+                                className="w-full bg-blue-500 hover:bg-blue-600 text-white py-2 px-3 rounded-lg text-xs font-medium transition-colors flex items-center justify-center gap-2"
+                              >
+                                <MessageCircle size={14} />
+                                Send Payment Confirmation
+                              </button>
+                              <p className="text-xs text-gray-500 mt-1 text-center">
+                                Notify customer about payment verification
+                              </p>
+                            </div>
+                          )}
                         </div>
 
                         {/* Delivery Information */}
@@ -437,6 +653,10 @@ const Orders = () => {
                             <Calendar size={14} />
                             <span>Customer since: {formatDate(order.Customer?.createdAt)}</span>
                           </div>
+                          <div className="flex items-center gap-1 mt-2">
+                            <MessageCircle size={14} className="text-green-600" />
+                            <span>Pay to: {WHATSAPP_NUMBER}</span>
+                          </div>
                         </div>
                       </div>
 
@@ -513,6 +733,63 @@ const Orders = () => {
                         </div>
                       </div>
 
+                      {/* WhatsApp Message Actions */}
+                      <div className="border border-gray-300 rounded-lg p-4 bg-blue-50">
+                        <h3 className="font-semibold text-gray-800 mb-3 flex items-center gap-2">
+                          <MessageCircle size={18} className="text-green-600" />
+                          WhatsApp Message Actions
+                        </h3>
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                          <button
+                            onClick={() => sendPaymentRequest(order)}
+                            className="bg-green-500 hover:bg-green-600 text-white py-2 px-3 rounded-lg text-sm font-medium transition-colors flex items-center justify-center gap-2"
+                          >
+                            <MessageCircle size={14} />
+                            Payment Request
+                          </button>
+                          
+                          <button
+                            onClick={() => sendOrderTakenMessage(order)}
+                            className="bg-yellow-500 hover:bg-yellow-600 text-white py-2 px-3 rounded-lg text-sm font-medium transition-colors flex items-center justify-center gap-2"
+                          >
+                            <MessageCircle size={14} />
+                            Order Taken
+                          </button>
+                          
+                          <button
+                            onClick={() => sendOrderShippedMessage(order)}
+                            className="bg-blue-500 hover:bg-blue-600 text-white py-2 px-3 rounded-lg text-sm font-medium transition-colors flex items-center justify-center gap-2"
+                          >
+                            <MessageCircle size={14} />
+                            Order Shipped
+                          </button>
+                          
+                          <button
+                            onClick={() => sendOrderDeliveredMessage(order)}
+                            className="bg-purple-500 hover:bg-purple-600 text-white py-2 px-3 rounded-lg text-sm font-medium transition-colors flex items-center justify-center gap-2"
+                          >
+                            <MessageCircle size={14} />
+                            Order Delivered
+                          </button>
+                          
+                          <button
+                            onClick={() => sendPaymentConfirmation(order)}
+                            className="bg-indigo-500 hover:bg-indigo-600 text-white py-2 px-3 rounded-lg text-sm font-medium transition-colors flex items-center justify-center gap-2"
+                          >
+                            <MessageCircle size={14} />
+                            Payment Confirmed
+                          </button>
+                          
+                          <button
+                            onClick={() => sendCustomMessage(order)}
+                            className="bg-gray-500 hover:bg-gray-600 text-white py-2 px-3 rounded-lg text-sm font-medium transition-colors flex items-center justify-center gap-2"
+                          >
+                            <MessageCircle size={14} />
+                            Custom Message
+                          </button>
+                        </div>
+                      </div>
+
                       {/* Status + Total */}
                       <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4 pt-2">
                         <div className="flex flex-col text-sm text-gray-700">
@@ -546,6 +823,42 @@ const Orders = () => {
                                 Updating...
                               </span>
                             )}
+                          </div>
+
+                          {/* Payment Status Update */}
+                          <div className="mt-4">
+                            <p className="font-semibold mb-2">Update Payment Status:</p>
+                            <div className="flex gap-3 flex-wrap">
+                              {[
+                                { label: "Pending", value: "pending" },
+                                { label: "Completed", value: "completed" },
+                                { label: "Failed", value: "failed" },
+                                { label: "Cancelled", value: "cancelled" },
+                              ].map(({ label, value }) => (
+                                <label
+                                  key={value}
+                                  className="flex items-center gap-1 cursor-pointer"
+                                >
+                                  <input
+                                    type="radio"
+                                    name={`payment-status-${order.id}`}
+                                    value={value}
+                                    checked={order.paymentStatus === value}
+                                    disabled={updatingPayment[order.id]}
+                                    onChange={(e) =>
+                                      updatePaymentStatus(order.id, e.target.value)
+                                    }
+                                    className="accent-blue-600"
+                                  />
+                                  <span>{label}</span>
+                                </label>
+                              ))}
+                              {updatingPayment[order.id] && (
+                                <span className="text-gray-500 text-xs ml-2">
+                                  Updating...
+                                </span>
+                              )}
+                            </div>
                           </div>
                         </div>
 

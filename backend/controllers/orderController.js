@@ -59,7 +59,7 @@ export const deleteOrder = async (req, res) => {
 };
 
 
-// Updated Place Order
+// Updated Place Order - No payment processing
 export const placeOrder = async (req, res) => {
   const { 
     name, 
@@ -69,11 +69,8 @@ export const placeOrder = async (req, res) => {
     wantsOffers, 
     products, 
     totalPrice, 
-    transactionId,
     deliveryPoint,
-    deliveryCharge,
-    paymentMethod,
-    paymentStatus 
+    deliveryCharge
   } = req.body;
 
   // Validate required fields
@@ -113,7 +110,7 @@ export const placeOrder = async (req, res) => {
       wantsOffers 
     });
 
-    // Create order with all fields
+    // Create order - payment status starts as 'pending'
     const order = await Order.create({
       customerId: customer.id,
       products,
@@ -121,9 +118,9 @@ export const placeOrder = async (req, res) => {
       deliveryAddress: address,
       deliveryPoint,
       deliveryCharge: deliveryCharge || 0,
-      paymentMethod: paymentMethod || "upi",
-      paymentStatus: paymentStatus || "initiated",
-      transactionId: transactionId || `TXN_${Date.now()}`,
+      paymentMethod: "whatsapp", // Changed to whatsapp
+      paymentStatus: "pending", // Starts as pending
+      transactionId: `ORD_${Date.now()}`,
     });
 
     // Return consistent response
@@ -154,7 +151,6 @@ export const placeOrder = async (req, res) => {
     });
   }
 };
-
 
 // In your orderController.js
 export const updatePaymentStatus = async (req, res) => {

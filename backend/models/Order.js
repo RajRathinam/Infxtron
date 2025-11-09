@@ -30,7 +30,7 @@ const Order = sequelize.define("Order", {
   },
   paymentMethod: {
     type: DataTypes.STRING,
-    defaultValue: "upi"
+    defaultValue: "whatsapp"
   },
   paymentStatus: {
     type: DataTypes.STRING,
