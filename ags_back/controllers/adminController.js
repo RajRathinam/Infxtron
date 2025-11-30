@@ -21,14 +21,27 @@ export const adminLogin = async (req, res) => {
       return res.status(401).json({ message: "Invalid credentials" });
     }
 
-    // Store session
+    // Store session - ENHANCED
     req.session.adminId = admin.id;
     req.session.adminEmail = admin.email;
+    req.session.isAuthenticated = true;
 
-    res.status(200).json({ 
-      message: "Login successful",
-      admin: { id: admin.id, email: admin.email }
+    // Save session explicitly
+    req.session.save((err) => {
+      if (err) {
+        console.error("Session save error:", err);
+        return res.status(500).json({ message: "Login failed - session error" });
+      }
+
+      console.log('Login successful - Session created:', req.sessionID);
+      
+      res.status(200).json({ 
+        message: "Login successful",
+        admin: { id: admin.id, email: admin.email },
+        sessionId: req.sessionID
+      });
     });
+
   } catch (err) {
     console.error("Login error:", err);
     res.status(500).json({ message: "Server error", error: err.message });
@@ -38,20 +51,24 @@ export const adminLogin = async (req, res) => {
 // Logout admin and destroy session
 export const adminLogout = async (req, res) => {
   try {
-    if (req.session) {
-      req.session.destroy((err) => {
-        if (err) {
-          console.error("Logout session destruction error:", err);
-          return res.status(500).json({ message: "Logout failed", error: err.message });
-        }
-        
-        // Use the same cookie name as defined in your session config
-        res.clearCookie("ag_admin"); // Match your session name "ag_admin"
-        res.status(200).json({ message: "Logout successful" });
+    const sessionId = req.sessionID;
+    
+    req.session.destroy((err) => {
+      if (err) {
+        console.error("Logout session destruction error:", err);
+        return res.status(500).json({ message: "Logout failed", error: err.message });
+      }
+      
+      // Clear cookie with same options as session
+      res.clearCookie("ag_admin", {
+        secure: true,
+        httpOnly: true,
+        sameSite: 'none'
       });
-    } else {
+      
+      console.log('Logout successful - Session destroyed:', sessionId);
       res.status(200).json({ message: "Logout successful" });
-    }
+    });
   } catch (err) {
     console.error("Logout error:", err);
     res.status(500).json({ message: "Server error", error: err.message });
@@ -93,7 +110,7 @@ export const changePassword = async (req, res) => {
       return res.status(401).json({ message: "Old password is incorrect" });
     }
 
-    // Update password (model hooks will handle hashing)
+    // Update password
     admin.password = newPassword;
     await admin.save();
 
@@ -101,5 +118,29 @@ export const changePassword = async (req, res) => {
   } catch (err) {
     console.error("Change password error:", err);
     res.status(500).json({ message: "Server error", error: err.message });
+  }
+};
+
+// Check session endpoint
+export const checkSession = async (req, res) => {
+  try {
+    if (req.session && req.session.adminId) {
+      const admin = await Admin.findByPk(req.session.adminId);
+      if (admin) {
+        return res.json({
+          authenticated: true,
+          admin: { id: admin.id, email: admin.email },
+          sessionId: req.sessionID
+        });
+      }
+    }
+    
+    res.json({
+      authenticated: false,
+      message: "No active session"
+    });
+  } catch (err) {
+    console.error("Check session error:", err);
+    res.status(500).json({ message: "Server error" });
   }
 };

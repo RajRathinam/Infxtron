@@ -23,25 +23,25 @@ const sessionStore = SequelizeStore(session.Store);
 const store = new sessionStore({
   db: sequelize,
   tableName: 'sessions',
-  checkExpirationInterval: 15 * 60 * 1000, // Clean up expired sessions every 15 minutes
-  expiration: 24 * 60 * 60 * 1000 // Session expiration: 24 hours
+  checkExpirationInterval: 15 * 60 * 1000,
+  expiration: 24 * 60 * 60 * 1000
 });
 
+// Enhanced CORS configuration
 app.use(
   cors({
     origin: function (origin, callback) {
-      // List of allowed origins
       const allowedOrigins = [
         "https://aghealthyfood-vz17.onrender.com",
         "https://agshealthyfoods.in"
       ];
       
-      // Allow requests with no origin (like mobile apps, Postman, etc.)
       if (!origin) return callback(null, true);
       
       if (allowedOrigins.indexOf(origin) !== -1) {
         callback(null, true);
       } else {
+        console.log('Blocked by CORS:', origin);
         callback(new Error('Not allowed by CORS'));
       }
     },
@@ -53,7 +53,7 @@ app.use(
 
 app.use(express.json());
 
-// Session configuration with Sequelize store
+// Session configuration - FIXED for production
 app.use(
   session({
     store: store,
@@ -61,26 +61,30 @@ app.use(
     resave: false,
     saveUninitialized: false,
     cookie: {
-      secure: process.env.NODE_ENV === "production", // Set to true in production if using HTTPS
+      secure: true, // CHANGED: Always true in production
       httpOnly: true,
-      maxAge: 1000 * 60 * 60 * 24, // 1 day
-      sameSite: process.env.NODE_ENV === "production" ? "none" : "lax" // Important for cross-site
+      maxAge: 24 * 60 * 60 * 1000, // 1 day
+      sameSite: 'none', // CHANGED: Always none for cross-domain
     },
     name: "ag_admin",
-    proxy: true // Trust the reverse proxy if you're behind one (like Render)
+    proxy: true
   })
 );
 
-// Add this after session middleware in server.js
+// Session debugging middleware
 app.use((req, res, next) => {
+  console.log('=== SESSION DEBUG ===');
   console.log('Session ID:', req.sessionID);
   console.log('Session data:', req.session);
   console.log('Cookies:', req.headers.cookie);
+  console.log('Origin:', req.headers.origin);
+  console.log('=====================');
   next();
 });
 
 app.get("/", (req, res) => res.send("✅ Server is running with MySQL + Sequelize"));
 
+// Routes
 app.use("/api/admin", adminRoutes);
 app.use("/api/products", productRoutes);
 app.use("/api/orders", orderRoutes);
@@ -88,32 +92,32 @@ app.use("/api/customers", customerRoutes);
 app.use("/api/offers", offerRoutes);
 app.use("/api/payments", paymentRoutes);
 
-// Initialize database and start server
+// Initialize database and start server - FIXED sequence
 async function initializeApp() {
   try {
-    // 1. First authenticate database connection
+    // 1. Database connection
     await sequelize.authenticate();
     console.log("✅ MySQL database connected successfully");
 
-    // 2. Sync session store FIRST before syncing other tables
+    // 2. Sync session store first
     console.log("🔄 Creating sessions table...");
     await store.sync();
     console.log("✅ Sessions table created successfully");
 
-    // 3. Sync all other database tables (remove force: true in production)
+    // 3. Sync other tables
     console.log("🔄 Syncing database tables...");
-    await sequelize.sync({ force: false }); // Change to { force: false } for production
+    await sequelize.sync({ force: false }); // CHANGED: force false for production
     console.log("✅ MySQL tables synced successfully");
 
-    // 4. Seed admin user
+    // 4. Seed admin
     console.log("🔄 Seeding admin user...");
     await seedAdmin(process.env.ADMIN_EMAIL, process.env.ADMIN_PASSWORD);
     console.log("✅ Admin user seeded successfully");
 
-    // 5. Start the server only after everything is ready
+    // 5. Start server
     app.listen(PORT, () => {
       console.log(`🚀 Server running on port ${PORT}`);
-      console.log(`📊 Environment: ${process.env.NODE_ENV || 'development'}`);
+      console.log(`🌐 Environment: ${process.env.NODE_ENV || 'production'}`);
     });
 
   } catch (error) {
