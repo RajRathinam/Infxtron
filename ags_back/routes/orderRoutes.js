@@ -8,14 +8,15 @@ import {
   sendOrderEmail,
   updatePaymentStatus
 } from "../controllers/orderController.js";
+import {isAdmin} from "../middleware/isAdmin.js";
 
 const router = express.Router();
 
 router.post("/", placeOrder);
-router.get("/", getOrders);
-router.patch("/:id/status", updateOrderStatus);
-router.patch("/:id/payment-status", updatePaymentStatus);
-router.post("/:id/send-email", sendOrderEmail);
-router.delete("/:id", deleteOrder);
+router.get("/",isAdmin, getOrders);
+router.patch("/:id/status",isAdmin, updateOrderStatus);
+router.patch("/:id/payment-status",isAdmin, updatePaymentStatus);
+router.post("/:id/send-email",isAdmin, sendOrderEmail);
+router.delete("/:id",isAdmin, deleteOrder);
 
 export default router;
