@@ -22,7 +22,7 @@ const PORT = process.env.PORT || 5000;
 const sessionStore = SequelizeStore(session.Store);
 const store = new sessionStore({
   db: sequelize,
-  tableName: 'sessions', // Optional: custom table name
+  tableName: 'sessions',
   checkExpirationInterval: 15 * 60 * 1000, // Clean up expired sessions every 15 minutes
   expiration: 24 * 60 * 60 * 1000 // Session expiration: 24 hours
 });
@@ -79,9 +79,6 @@ app.use((req, res, next) => {
   next();
 });
 
-// Sync session store
-store.sync();
-
 app.get("/", (req, res) => res.send("✅ Server is running with MySQL + Sequelize"));
 
 app.use("/api/admin", adminRoutes);
@@ -91,17 +88,39 @@ app.use("/api/customers", customerRoutes);
 app.use("/api/offers", offerRoutes);
 app.use("/api/payments", paymentRoutes);
 
-sequelize
-  .authenticate()
-  .then(() => console.log("✅ MySQL database connected successfully"))
-  .catch((err) => console.error("❌ MySQL database connection failed:", err));
+// Initialize database and start server
+async function initializeApp() {
+  try {
+    // 1. First authenticate database connection
+    await sequelize.authenticate();
+    console.log("✅ MySQL database connected successfully");
 
-sequelize
-  .sync({ force: true })
-  .then(async () => {
+    // 2. Sync session store FIRST before syncing other tables
+    console.log("🔄 Creating sessions table...");
+    await store.sync();
+    console.log("✅ Sessions table created successfully");
+
+    // 3. Sync all other database tables (remove force: true in production)
+    console.log("🔄 Syncing database tables...");
+    await sequelize.sync({ force: false }); // Change to { force: false } for production
     console.log("✅ MySQL tables synced successfully");
-    await seedAdmin(process.env.ADMIN_EMAIL, process.env.ADMIN_PASSWORD);
-  })
-  .catch((err) => console.error("❌ Error syncing MySQL tables:", err));
 
-app.listen(PORT, () => console.log(`🚀 Server running on port ${PORT}`));
+    // 4. Seed admin user
+    console.log("🔄 Seeding admin user...");
+    await seedAdmin(process.env.ADMIN_EMAIL, process.env.ADMIN_PASSWORD);
+    console.log("✅ Admin user seeded successfully");
+
+    // 5. Start the server only after everything is ready
+    app.listen(PORT, () => {
+      console.log(`🚀 Server running on port ${PORT}`);
+      console.log(`📊 Environment: ${process.env.NODE_ENV || 'development'}`);
+    });
+
+  } catch (error) {
+    console.error("❌ Failed to initialize application:", error);
+    process.exit(1);
+  }
+}
+
+// Start the application
+initializeApp();
