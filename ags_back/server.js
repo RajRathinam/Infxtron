@@ -32,7 +32,6 @@ app.use(
   cors({
     origin: function (origin, callback) {
       const allowedOrigins = [
-        "https://aghealthyfood-vz17.onrender.com",
         "https://agshealthyfoods.in"
       ];
       
@@ -106,7 +105,7 @@ async function initializeApp() {
 
     // 3. Sync other tables
     console.log("🔄 Syncing database tables...");
-    await sequelize.sync({ force: false }); // CHANGED: force false for production
+    await sequelize.sync({ alter: false }); // CHANGED: force false for production
     console.log("✅ MySQL tables synced successfully");
 
     // 4. Seed admin
