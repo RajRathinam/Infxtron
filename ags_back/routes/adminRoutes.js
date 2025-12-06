@@ -3,7 +3,7 @@ import Customer from "../models/Customer.js";
 import Order from "../models/Order.js";
 import Product from "../models/Product.js";
 import { adminLogin, adminLogout, changePassword } from "../controllers/adminController.js";
-import {isAdmin} from "../middleware/isAdmin.js";
+
 const router = express.Router();
 
 // --- Dashboard stats ---
@@ -26,7 +26,7 @@ router.get("/dashboard-stats", async (req, res) => {
 
 // --- Admin authentication routes ---
 router.post("/login", adminLogin);
-router.post("/logout",isAdmin, adminLogout);
-router.put("/change-password",isAdmin, changePassword);
+router.post("/logout", adminLogout);
+router.put("/change-password", changePassword);
 
 export default router;

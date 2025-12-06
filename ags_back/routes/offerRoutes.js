@@ -6,18 +6,19 @@ import {
   updateOfferStatus,
   deleteOffer,getActiveOffers,updateOffer,getOfferById
 } from "../controllers/offerController.js";
-import {isAdmin} from "../middleware/isAdmin.js";
 
 const router = express.Router();
 
+
+
 // Admin-only routes
-router.get("/",isAdmin, listOffers);
-router.post("/",isAdmin, upload.single("image"), createOffer);
-router.patch("/:id/status",isAdmin, updateOfferStatus);
-router.delete("/:id",isAdmin, deleteOffer);
+router.get("/", listOffers);
+router.post("/", upload.single("image"), createOffer);
+router.patch("/:id/status", updateOfferStatus);
+router.delete("/:id", deleteOffer);
 // In your routes file
 router.get('/active', getActiveOffers);
-router.get('/:id',isAdmin, getOfferById);
-router.put('/:id',isAdmin, updateOffer); // For full updates
+router.get('/:id', getOfferById);
+router.put('/:id', updateOffer); // For full updates
 
 export default router;

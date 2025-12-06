@@ -22,25 +22,25 @@ const PORT = process.env.PORT || 5000;
 const sessionStore = SequelizeStore(session.Store);
 const store = new sessionStore({
   db: sequelize,
-  tableName: 'sessions',
-  checkExpirationInterval: 15 * 60 * 1000,
-  expiration: 24 * 60 * 60 * 1000
+  tableName: 'sessions', // Optional: custom table name
+  checkExpirationInterval: 15 * 60 * 1000, // Clean up expired sessions every 15 minutes
+  expiration: 24 * 60 * 60 * 1000 // Session expiration: 24 hours
 });
 
-// Enhanced CORS configuration
 app.use(
   cors({
     origin: function (origin, callback) {
+      // List of allowed origins
       const allowedOrigins = [
         "https://agshealthyfoods.in"
       ];
       
+      // Allow requests with no origin (like mobile apps, Postman, etc.)
       if (!origin) return callback(null, true);
       
       if (allowedOrigins.indexOf(origin) !== -1) {
         callback(null, true);
       } else {
-        console.log('Blocked by CORS:', origin);
         callback(new Error('Not allowed by CORS'));
       }
     },
@@ -52,7 +52,7 @@ app.use(
 
 app.use(express.json());
 
-// Session configuration - FIXED for production
+// Session configuration with Sequelize store
 app.use(
   session({
     store: store,
@@ -60,30 +60,29 @@ app.use(
     resave: false,
     saveUninitialized: false,
     cookie: {
-      secure: true, // CHANGED: Always true in production
+      secure: process.env.NODE_ENV === "production", // Set to true in production if using HTTPS
       httpOnly: true,
-      maxAge: 24 * 60 * 60 * 1000, // 1 day
-      sameSite: 'none', // CHANGED: Always none for cross-domain
+      maxAge: 1000 * 60 * 60 * 24, // 1 day
+      sameSite: process.env.NODE_ENV === "production" ? "none" : "lax" // Important for cross-site
     },
     name: "ag_admin",
-    proxy: true
+    proxy: true // Trust the reverse proxy if you're behind one (like Render)
   })
 );
 
-// Session debugging middleware
+// Add this after session middleware in server.js
 app.use((req, res, next) => {
-  console.log('=== SESSION DEBUG ===');
   console.log('Session ID:', req.sessionID);
   console.log('Session data:', req.session);
   console.log('Cookies:', req.headers.cookie);
-  console.log('Origin:', req.headers.origin);
-  console.log('=====================');
   next();
 });
 
+// Sync session store
+store.sync();
+
 app.get("/", (req, res) => res.send("✅ Server is running with MySQL + Sequelize"));
 
-// Routes
 app.use("/api/admin", adminRoutes);
 app.use("/api/products", productRoutes);
 app.use("/api/orders", orderRoutes);
@@ -91,39 +90,17 @@ app.use("/api/customers", customerRoutes);
 app.use("/api/offers", offerRoutes);
 app.use("/api/payments", paymentRoutes);
 
-// Initialize database and start server - FIXED sequence
-async function initializeApp() {
-  try {
-    // 1. Database connection
-    await sequelize.authenticate();
-    console.log("✅ MySQL database connected successfully");
+sequelize
+  .authenticate()
+  .then(() => console.log("✅ MySQL database connected successfully"))
+  .catch((err) => console.error("❌ MySQL database connection failed:", err));
 
-    // 2. Sync session store first
-    console.log("🔄 Creating sessions table...");
-    await store.sync();
-    console.log("✅ Sessions table created successfully");
-
-    // 3. Sync other tables
-    console.log("🔄 Syncing database tables...");
-    await sequelize.sync({ alter: false }); // CHANGED: force false for production
+sequelize
+  .sync({ alter: true })
+  .then(async () => {
     console.log("✅ MySQL tables synced successfully");
-
-    // 4. Seed admin
-    console.log("🔄 Seeding admin user...");
     await seedAdmin(process.env.ADMIN_EMAIL, process.env.ADMIN_PASSWORD);
-    console.log("✅ Admin user seeded successfully");
+  })
+  .catch((err) => console.error("❌ Error syncing MySQL tables:", err));
 
-    // 5. Start server
-    app.listen(PORT, () => {
-      console.log(`🚀 Server running on port ${PORT}`);
-      console.log(`🌐 Environment: ${process.env.NODE_ENV || 'production'}`);
-    });
-
-  } catch (error) {
-    console.error("❌ Failed to initialize application:", error);
-    process.exit(1);
-  }
-}
-
-// Start the application
-initializeApp();
+app.listen(PORT, () => console.log(`🚀 Server running on port ${PORT}`));
