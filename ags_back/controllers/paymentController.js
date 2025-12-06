@@ -1,25 +1,32 @@
 import Order from "../models/Order.js";
 import Transaction from "../models/Transaction.js";
-import crypto from "crypto"; // Added for signature verification
+import crypto from "crypto";
 
-// Try to import PhonePe SDK
-let PhonePeSDK;
-try {
-  // Use dynamic import for ES modules
-  const sdkModule = await import('pg-sdk-node');
-  PhonePeSDK = sdkModule.default || sdkModule;
-  console.log('✅ PhonePe SDK loaded successfully');
-} catch (error) {
-  console.error('❌ Failed to load PhonePe SDK:', error.message);
-}
+// PhonePe SDK - We'll lazy load it since it might not be installed
+let PhonePeSDK = null;
+const loadPhonePeSDK = async () => {
+  if (!PhonePeSDK) {
+    try {
+      const sdkModule = await import('pg-sdk-node');
+      PhonePeSDK = sdkModule.default || sdkModule;
+      console.log('✅ PhonePe SDK loaded successfully');
+    } catch (error) {
+      console.error('❌ Failed to load PhonePe SDK:', error.message);
+      throw new Error('PhonePe SDK not installed. Run: npm install pg-sdk-node');
+    }
+  }
+  return PhonePeSDK;
+};
 
-// PhonePe SDK Configuration
+// PhonePe Configuration
 const PHONEPE_CONFIG = {
   clientId: process.env.PHONEPE_CLIENT_ID,
   clientSecret: process.env.PHONEPE_CLIENT_SECRET,
   clientVersion: parseInt(process.env.PHONEPE_CLIENT_VERSION) || 1,
   environment: process.env.PHONEPE_ENV || 'SANDBOX',
-  webhookSecret: process.env.WEBHOOK_SECRET
+  // Webhook Basic Auth credentials (from PhonePe dashboard)
+  webhookUsername: process.env.WEBHOOK_USERNAME || 'raj123',
+  webhookPassword: process.env.WEBHOOK_PASSWORD || 'raj12345'
 };
 
 // Validate PhonePe configuration
@@ -35,56 +42,43 @@ const validatePhonePeConfig = () => {
   if (missing.length > 0) {
     throw new Error(`PhonePe configuration missing: ${missing.join(', ')}. Get these from PhonePe Dashboard → Developer Settings`);
   }
-  
-  if (!PhonePeSDK) {
-    throw new Error('PhonePe SDK not installed. Run: npm install pg-sdk-node');
-  }
 };
 
 // Generate unique transaction IDs
 const generateTransactionId = () => `TXN_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
 const generateMerchantTransactionId = () => `MTXN_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
 
-// 🔐 Verify PhonePe webhook signature
-const verifyWebhookSignature = (payload, signature, webhookSecret) => {
+// Verify Basic Authentication for webhooks
+const verifyBasicAuth = (authHeader) => {
   try {
-    if (!webhookSecret) {
-      console.warn('⚠️ WEBHOOK_SECRET not configured, skipping signature verification');
-      return true; // Allow in development
+    if (!authHeader || !authHeader.startsWith('Basic ')) {
+      return false;
     }
     
-    // PhonePe signature format: sha256(payload + webhookSecret)
-    const expectedSignature = crypto
-      .createHash('sha256')
-      .update(payload + webhookSecret)
-      .digest('hex');
+    const base64Credentials = authHeader.split(' ')[1];
+    const credentials = Buffer.from(base64Credentials, 'base64').toString('ascii');
+    const [username, password] = credentials.split(':');
     
-    const isValid = expectedSignature === signature;
-    
-    if (!isValid) {
-      console.error('❌ Webhook signature verification failed');
-      console.log('Expected:', expectedSignature);
-      console.log('Received:', signature);
-    }
-    
-    return isValid;
+    return username === PHONEPE_CONFIG.webhookUsername && 
+           password === PHONEPE_CONFIG.webhookPassword;
   } catch (error) {
-    console.error('Signature verification error:', error);
+    console.error('Basic Auth verification error:', error);
     return false;
   }
 };
 
 // Initialize PhonePe client (singleton)
 let phonePeClient = null;
-const getPhonePeClient = () => {
+const getPhonePeClient = async () => {
   if (!phonePeClient) {
     validatePhonePeConfig();
+    const SDK = await loadPhonePeSDK();
     
     const env = PHONEPE_CONFIG.environment === 'PRODUCTION' 
-      ? PhonePeSDK.Env.PRODUCTION 
-      : PhonePeSDK.Env.SANDBOX;
+      ? SDK.Env.PRODUCTION 
+      : SDK.Env.SANDBOX;
     
-    phonePeClient = PhonePeSDK.StandardCheckoutClient.getInstance(
+    phonePeClient = SDK.StandardCheckoutClient.getInstance(
       PHONEPE_CONFIG.clientId,
       PHONEPE_CONFIG.clientSecret,
       PHONEPE_CONFIG.clientVersion,
@@ -98,8 +92,6 @@ const getPhonePeClient = () => {
 
 // Initiate PhonePe Payment using SDK
 export const initiatePayment = async (req, res) => {
-  let currentOrderId;
-  
   try {
     const { orderId, amount, customerPhone, customerEmail } = req.body;
 
@@ -112,7 +104,7 @@ export const initiatePayment = async (req, res) => {
     }
 
     // Get PhonePe client
-    const client = getPhonePeClient();
+    const client = await getPhonePeClient();
 
     // Find the order
     const order = await Order.findByPk(orderId, {
@@ -156,14 +148,15 @@ export const initiatePayment = async (req, res) => {
     });
 
     // Prepare metadata
-    const metaInfo = PhonePeSDK.MetaInfo.builder()
+    const SDK = await loadPhonePeSDK();
+    const metaInfo = SDK.MetaInfo.builder()
       .udf1(order.Customer?.name || 'Customer')
       .udf2(order.Customer?.phone || customerPhone || '')
       .udf3(order.Customer?.email || customerEmail || '')
       .build();
 
     // Create payment request using SDK
-    const request = PhonePeSDK.StandardCheckoutPayRequest.builder()
+    const request = SDK.StandardCheckoutPayRequest.builder()
       .merchantOrderId(merchantTransactionId)
       .amount(amount * 100) // Convert to paise
       .redirectUrl(`${process.env.FRONTEND_URL}/payment-result?order=${orderId}&transaction=${transactionId}`)
@@ -209,24 +202,6 @@ export const initiatePayment = async (req, res) => {
   } catch (error) {
     console.error("❌ Payment initiation error:", error);
     
-    // Update transaction as failed
-    if (currentOrderId) {
-      try {
-        await Transaction.update(
-          { paymentStatus: "FAILED" },
-          { where: { orderId: currentOrderId } }
-        );
-        
-        await Order.update(
-          { paymentStatus: "failed" },
-          { where: { id: currentOrderId } }
-        );
-      } catch (updateError) {
-        console.error("Error updating failed transaction:", updateError);
-      }
-    }
-
-    // Handle PhonePe SDK specific errors
     let errorMessage = "Failed to initiate payment";
     if (error.code) {
       errorMessage = `PhonePe Error: ${error.message}`;
@@ -264,7 +239,7 @@ export const getPaymentStatus = async (req, res) => {
     // Try to get status from PhonePe if still pending
     if (transaction.paymentStatus === "PENDING" && transaction.merchantTransactionId) {
       try {
-        const client = getPhonePeClient();
+        const client = await getPhonePeClient();
         const statusResponse = await client.getOrderStatus(transaction.merchantTransactionId);
         
         // Update based on PhonePe response
@@ -320,100 +295,148 @@ export const getPaymentStatus = async (req, res) => {
   }
 };
 
-// 🔒 SECURE Payment Callback Handler (Updated with signature verification)
+// 🔒 Payment Callback Handler with BASIC AUTHENTICATION
 export const paymentCallback = async (req, res) => {
+  console.log('\n📥 ========== PHONEPE WEBHOOK RECEIVED ==========');
+  console.log('📋 Headers:', JSON.stringify(req.headers, null, 2));
+  console.log('📦 Body:', JSON.stringify(req.body, null, 2));
+  
   try {
-    console.log('📥 PhonePe Webhook Received');
-    console.log('Headers:', req.headers);
-    console.log('Body:', req.body);
+    // 🔐 STEP 1: VERIFY BASIC AUTHENTICATION (PhonePe sends this)
+    const authHeader = req.headers['authorization'];
     
-    // Get signature from headers
-    const signature = req.headers['x-verify'] || req.headers['x-phonepe-signature'];
-    const webhookSecret = PHONEPE_CONFIG.webhookSecret;
-    
-    // Verify webhook signature for security
-    const payload = JSON.stringify(req.body);
-    if (signature && webhookSecret) {
-      const isValid = verifyWebhookSignature(payload, signature, webhookSecret);
-      if (!isValid) {
-        console.error('❌ Webhook signature verification failed - Potential security threat!');
-        return res.status(401).json({
-          success: false,
-          message: "Invalid webhook signature"
-        });
-      }
-      console.log('✅ Webhook signature verified successfully');
-    } else if (!webhookSecret) {
-      console.warn('⚠️ WEBHOOK_SECRET not configured - Running in insecure mode');
-    }
-    
-    // Parse the webhook data
-    const webhookData = req.body;
-    
-    // Handle different webhook formats
-    let eventType, merchantTransactionId, paymentStatus, transactionId;
-    
-    // Format 1: Standard PhonePe webhook format
-    if (webhookData.type && webhookData.payload) {
-      eventType = webhookData.type;
-      merchantTransactionId = webhookData.payload.originalMerchantOrderId;
-      transactionId = webhookData.payload.transactionId;
-      paymentStatus = webhookData.payload.state;
-      
-      console.log(`Processing webhook: ${eventType} for ${merchantTransactionId}`);
-    }
-    // Format 2: Direct payment response (for pay page redirect)
-    else if (webhookData.response && webhookData.response.merchantTransactionId) {
-      merchantTransactionId = webhookData.response.merchantTransactionId;
-      transactionId = webhookData.response.transactionId;
-      paymentStatus = webhookData.response.state;
-      eventType = `PAYMENT_${paymentStatus}`;
-      
-      console.log(`Processing payment response for ${merchantTransactionId}`);
-    }
-    // Format 3: Check for merchantTransactionId directly
-    else if (webhookData.merchantTransactionId) {
-      merchantTransactionId = webhookData.merchantTransactionId;
-      transactionId = webhookData.transactionId;
-      paymentStatus = webhookData.state || webhookData.status;
-      eventType = webhookData.event || 'PAYMENT_UPDATE';
-      
-      console.log(`Processing payment update for ${merchantTransactionId}`);
-    } else {
-      console.error('❌ Unrecognized webhook format:', webhookData);
-      return res.status(200).json({
-        success: true,
-        message: "Webhook received but format not recognized"
+    if (!authHeader) {
+      console.error('❌ MISSING Authorization header - PhonePe should send Basic Auth');
+      return res.status(401).json({
+        success: false,
+        code: "AUTH_REQUIRED",
+        message: "Authorization header is required"
       });
     }
     
-    // Find transaction by merchantTransactionId
+    // Verify Basic Auth
+    const isAuthenticated = verifyBasicAuth(authHeader);
+    if (!isAuthenticated) {
+      console.error('❌ INVALID Basic Authentication credentials');
+      return res.status(401).json({
+        success: false,
+        code: "INVALID_CREDENTIALS",
+        message: "Invalid webhook credentials"
+      });
+    }
+    
+    console.log('✅ BASIC AUTH VERIFIED SUCCESSFULLY');
+    
+    // 📋 STEP 2: PARSE WEBHOOK DATA
+    const webhookData = req.body;
+    
+    if (!webhookData) {
+      console.error('❌ EMPTY WEBHOOK BODY');
+      return res.status(400).json({
+        success: false,
+        code: "EMPTY_BODY",
+        message: "Webhook body is empty"
+      });
+    }
+    
+    // Extract event information
+    const eventType = webhookData.type || 'UNKNOWN_EVENT';
+    const payload = webhookData.payload || webhookData.response || webhookData;
+    
+    console.log(`🎯 Event Type: ${eventType}`);
+    console.log('📊 Payload:', JSON.stringify(payload, null, 2));
+    
+    // Extract transaction details
+    const merchantTransactionId = 
+      payload.originalMerchantOrderId || 
+      payload.merchantTransactionId || 
+      payload.merchantOrderId;
+    
+    const transactionId = payload.transactionId;
+    const state = payload.state || payload.status;
+    const amount = payload.amount;
+    
+    if (!merchantTransactionId) {
+      console.error('❌ NO MERCHANT TRANSACTION ID FOUND');
+      console.log('Available payload keys:', Object.keys(payload));
+      return res.status(200).json({
+        success: true,
+        code: "NO_TRANSACTION_ID",
+        message: "Received but no transaction ID found"
+      });
+    }
+    
+    console.log(`💳 Processing: ${merchantTransactionId}`);
+    console.log(`📈 Status: ${state}, Amount: ${amount}, Txn ID: ${transactionId}`);
+    
+    // 📋 STEP 3: FIND TRANSACTION IN DATABASE
     const transaction = await Transaction.findOne({
       where: { merchantTransactionId },
       include: [Order]
     });
     
     if (!transaction) {
-      console.error('Transaction not found:', merchantTransactionId);
-      return res.status(200).json({ 
-        success: true, 
-        message: "Webhook received but transaction not found" 
+      console.error(`❌ TRANSACTION NOT FOUND: ${merchantTransactionId}`);
+      return res.status(200).json({
+        success: true,
+        code: "TRANSACTION_NOT_FOUND",
+        message: "Transaction not found in database"
       });
     }
     
-    // Map PhonePe status to our status
+    // 🎯 STEP 4: MAP STATUS AND UPDATE DATABASE
     let dbPaymentStatus = "PENDING";
     let orderPaymentStatus = "pending";
+    let eventDescription = "Payment pending";
     
-    if (paymentStatus === "COMPLETED" || eventType.includes("COMPLETED") || eventType.includes("SUCCESS")) {
-      dbPaymentStatus = "SUCCESS";
-      orderPaymentStatus = "paid";
-    } else if (paymentStatus === "FAILED" || eventType.includes("FAILED") || eventType.includes("ERROR")) {
-      dbPaymentStatus = "FAILED";
-      orderPaymentStatus = "failed";
-    } else if (paymentStatus === "REFUNDED" || eventType.includes("REFUND")) {
-      dbPaymentStatus = "REFUNDED";
-      orderPaymentStatus = "refunded";
+    switch (eventType) {
+      case "CHECKOUT_ORDER_COMPLETED":
+        if (state === "COMPLETED") {
+          dbPaymentStatus = "SUCCESS";
+          orderPaymentStatus = "paid";
+          eventDescription = "Payment completed successfully";
+        }
+        break;
+        
+      case "CHECKOUT_ORDER_FAILED":
+        dbPaymentStatus = "FAILED";
+        orderPaymentStatus = "failed";
+        eventDescription = "Payment failed";
+        break;
+        
+      case "CHECKOUT_ORDER_PENDING":
+        dbPaymentStatus = "PENDING";
+        orderPaymentStatus = "pending";
+        eventDescription = "Payment pending";
+        break;
+        
+      case "CHECKOUT_ORDER_ABANDONED":
+        dbPaymentStatus = "ABANDONED";
+        orderPaymentStatus = "pending";
+        eventDescription = "Payment abandoned by user";
+        break;
+        
+      case "PG_REFUND_COMPLETED":
+        dbPaymentStatus = "REFUNDED";
+        orderPaymentStatus = "refunded";
+        eventDescription = "Refund completed";
+        break;
+        
+      default:
+        // Handle generic states
+        if (state === "COMPLETED") {
+          dbPaymentStatus = "SUCCESS";
+          orderPaymentStatus = "paid";
+          eventDescription = `Payment completed (${eventType})`;
+        } else if (state === "FAILED") {
+          dbPaymentStatus = "FAILED";
+          orderPaymentStatus = "failed";
+          eventDescription = `Payment failed (${eventType})`;
+        } else {
+          dbPaymentStatus = "PENDING";
+          orderPaymentStatus = "pending";
+          eventDescription = `Payment ${state} (${eventType})`;
+        }
     }
     
     // Update transaction
@@ -421,7 +444,9 @@ export const paymentCallback = async (req, res) => {
       paymentStatus: dbPaymentStatus,
       callbackData: webhookData,
       gatewayTransactionId: transactionId,
-      updatedAt: new Date()
+      updatedAt: new Date(),
+      eventDescription: eventDescription,
+      lastWebhookEvent: eventType
     });
     
     // Update order
@@ -429,36 +454,55 @@ export const paymentCallback = async (req, res) => {
       await transaction.Order.update({
         paymentStatus: orderPaymentStatus,
         transactionId: transactionId,
-        updatedAt: new Date()
+        updatedAt: new Date(),
+        paymentNotes: `${eventType}: ${eventDescription}`
       });
     }
     
     console.log(`✅ Updated transaction ${merchantTransactionId} to ${dbPaymentStatus}`);
+    console.log(`📝 Description: ${eventDescription}`);
     
-    // Return success to PhonePe
+    // Log for auditing
+    console.log('📋 Webhook Processing Summary:', {
+      eventType,
+      merchantTransactionId,
+      transactionId,
+      amount,
+      oldStatus: transaction.paymentStatus,
+      newStatus: dbPaymentStatus,
+      orderId: transaction.Order?.id,
+      timestamp: new Date().toISOString()
+    });
+    
+    // ✅ STEP 5: RETURN SUCCESS TO PHONEPE
     res.status(200).json({
       success: true,
       code: "WEBHOOK_PROCESSED",
-      message: "Webhook processed successfully"
+      message: "Webhook processed successfully",
+      timestamp: new Date().toISOString(),
+      processedEvent: eventType,
+      transactionStatus: dbPaymentStatus
     });
     
   } catch (error) {
     console.error("❌ Payment callback error:", error);
+    console.error("Error stack:", error.stack);
     
-    // Still return 200 to prevent PhonePe from retrying too much
+    // Still return 200 to prevent PhonePe from retrying excessively
     res.status(200).json({ 
       success: false,
-      message: "Callback processed with errors",
-      error: error.message 
+      message: "Webhook processed with errors",
+      error: error.message,
+      timestamp: new Date().toISOString()
     });
   }
 };
 
-// Check PhonePe Configuration (Updated)
+// Check PhonePe Configuration
 export const checkPhonePeConfig = async (req, res) => {
   try {
     validatePhonePeConfig();
-    const client = getPhonePeClient();
+    const client = await getPhonePeClient();
     
     res.status(200).json({
       success: true,
@@ -466,14 +510,22 @@ export const checkPhonePeConfig = async (req, res) => {
       config: {
         clientId: PHONEPE_CONFIG.clientId ? 'Configured' : 'Not configured',
         clientSecret: PHONEPE_CONFIG.clientSecret ? 'Configured' : 'Not configured',
-        webhookSecret: PHONEPE_CONFIG.webhookSecret ? 'Configured' : 'Not configured (Security Risk)',
+        webhookUsername: PHONEPE_CONFIG.webhookUsername ? 'Configured' : 'Not configured',
         clientVersion: PHONEPE_CONFIG.clientVersion,
         environment: PHONEPE_CONFIG.environment,
         sdk: PhonePeSDK ? 'Available' : 'Not available'
       },
-      security: {
-        webhookVerification: PHONEPE_CONFIG.webhookSecret ? 'Enabled' : 'Disabled (Insecure)',
-        signatureVerification: PHONEPE_CONFIG.webhookSecret ? 'Required' : 'Skipped'
+      webhookInfo: {
+        url: `${process.env.BACKEND_URL || 'https://yourdomain.com'}/api/payments/callback`,
+        authType: "Basic Authentication",
+        username: PHONEPE_CONFIG.webhookUsername,
+        activeEvents: [
+          "CHECKOUT_ORDER_COMPLETED",
+          "CHECKOUT_ORDER_FAILED", 
+          "CHECKOUT_ORDER_PENDING",
+          "CHECKOUT_ORDER_ABANDONED",
+          "PG_REFUND_COMPLETED"
+        ]
       }
     });
   } catch (error) {
@@ -488,38 +540,56 @@ export const checkPhonePeConfig = async (req, res) => {
         "4. Update .env file with:",
         "   PHONEPE_CLIENT_ID=your_client_id",
         "   PHONEPE_CLIENT_SECRET=your_client_secret",
-        "   PHONEPE_WEBHOOK_SECRET=your_webhook_secret",
-        "5. Set callback URL in PhonePe dashboard to:",
-        "   https://yourdomain.com/api/payments/callback"
+        "   WEBHOOK_USERNAME=raj123",
+        "   WEBHOOK_PASSWORD=raj12345",
+        "5. Set webhook in PhonePe dashboard with:",
+        "   URL: https://agshealthyfoods.in/api/payments/callback",
+        "   Username: raj123",
+        "   Password: raj12345"
       ]
     });
   }
 };
 
-// Add a new endpoint to test webhook (for debugging)
+// Test Webhook Endpoint
 export const testWebhook = async (req, res) => {
   try {
-    // This is for testing webhook functionality
     console.log('🔧 Webhook test endpoint called');
     
     res.status(200).json({
       success: true,
-      message: "Webhook endpoint is active",
-      info: {
-        path: "/api/payments/callback",
+      message: "Webhook endpoint is active and ready",
+      endpoint: {
+        url: "/api/payments/callback",
         method: "POST",
-        requiredHeaders: ["Content-Type: application/json"],
-        signatureVerification: PHONEPE_CONFIG.webhookSecret ? "Enabled" : "Disabled",
-        testPayload: {
+        authentication: "Basic Authentication Required",
+        expectedCredentials: {
+          username: PHONEPE_CONFIG.webhookUsername,
+          password: PHONEPE_CONFIG.webhookPassword
+        },
+        sampleHeaders: {
+          "Content-Type": "application/json",
+          "Authorization": "Basic " + Buffer.from(`${PHONEPE_CONFIG.webhookUsername}:${PHONEPE_CONFIG.webhookPassword}`).toString('base64')
+        },
+        samplePayload: {
           type: "CHECKOUT_ORDER_COMPLETED",
           payload: {
-            originalMerchantOrderId: "TEST_MTXN_123",
-            transactionId: "TEST_TXN_456",
+            originalMerchantOrderId: "MTXN_123456789",
+            transactionId: "TXN_987654321",
             state: "COMPLETED",
-            amount: 10000
+            amount: 10000,
+            currency: "INR"
           }
         }
-      }
+      },
+      instructions: [
+        "1. Configure in PhonePe dashboard with:",
+        `   URL: ${process.env.BACKEND_URL || 'https://yourdomain.com'}/api/payments/callback`,
+        `   Username: ${PHONEPE_CONFIG.webhookUsername}`,
+        `   Password: ${PHONEPE_CONFIG.webhookPassword}`,
+        "2. Select active events: CHECKOUT_ORDER_COMPLETED, CHECKOUT_ORDER_FAILED, etc.",
+        "3. Save and test webhook from PhonePe dashboard"
+      ]
     });
   } catch (error) {
     console.error("Test webhook error:", error);
