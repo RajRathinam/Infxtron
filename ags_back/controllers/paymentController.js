@@ -4,12 +4,13 @@ import Transaction from "../models/Transaction.js";
 // Try to import PhonePe SDK
 let PhonePeSDK;
 try {
-  PhonePeSDK = require('pg-sdk-node');
+  // Use dynamic import for ES modules
+  const sdkModule = await import('pg-sdk-node');
+  PhonePeSDK = sdkModule.default || sdkModule;
   console.log('✅ PhonePe SDK loaded successfully');
 } catch (error) {
   console.error('❌ Failed to load PhonePe SDK:', error.message);
 }
-
 // PhonePe SDK Configuration
 const PHONEPE_CONFIG = {
   clientId: process.env.PHONEPE_CLIENT_ID,
