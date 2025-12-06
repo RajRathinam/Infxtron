@@ -5,15 +5,17 @@ import {
   paymentCallback, 
   getPaymentStatus,
   checkPhonePeConfig,
-  testWebhook  // Add this
+  updatePaymentStatus,  // For testing
+  testPayment          // For testing
 } from "../controllers/paymentController.js";
 
 const router = express.Router();
 
 router.get("/config", checkPhonePeConfig);
-router.get("/test-webhook", testWebhook);  // For debugging
 router.post("/initiate", initiatePayment);
 router.post("/callback", paymentCallback);
 router.get("/status/:transactionId", getPaymentStatus);
+router.post("/update-status", updatePaymentStatus);  // Manual update for testing
+router.post("/test", testPayment);                   // Test endpoint
 
 export default router;
