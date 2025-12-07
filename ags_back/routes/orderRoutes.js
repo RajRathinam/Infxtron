@@ -5,7 +5,7 @@ import {
   getOrders,
   updateOrderStatus,
   deleteOrder,
-  updatePaymentStatus
+  updatePaymentStatus,getOrderById
 } from "../controllers/orderController.js";
 
 const router = express.Router();
@@ -15,5 +15,6 @@ router.get("/", getOrders);
 router.patch("/:id/status", updateOrderStatus);
 router.patch("/:id/payment-status", updatePaymentStatus);
 router.delete("/:id", deleteOrder);
-
+// routes/orderRoutes.js
+router.get("/:id", getOrderById); // Add this line
 export default router;

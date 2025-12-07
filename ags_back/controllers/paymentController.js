@@ -453,3 +453,92 @@ export const testPayment = async (req, res) => {
     });
   }
 };
+
+// Add this to your paymentController.js
+
+export const verifyPayment = async (req, res) => {
+  try {
+    const { orderId, transactionId } = req.body;
+    
+    // Find transaction
+    let transaction;
+    if (transactionId) {
+      transaction = await Transaction.findOne({
+        where: { transactionId },
+        include: [Order]
+      });
+    } else if (orderId) {
+      transaction = await Transaction.findOne({
+        where: { orderId },
+        order: [['createdAt', 'DESC']],
+        include: [Order]
+      });
+    }
+    
+    if (!transaction) {
+      return res.status(404).json({
+        success: false,
+        message: "Transaction not found"
+      });
+    }
+    
+    // If transaction is still pending, check with PhonePe
+    if (transaction.paymentStatus === "PENDING" && transaction.merchantTransactionId) {
+      try {
+        // Check status with PhonePe API
+        const client = getPhonePeClient();
+        const statusResponse = await client.getOrderStatus(transaction.merchantTransactionId);
+        
+        console.log('PhonePe status check:', statusResponse);
+        
+        // Update based on PhonePe response
+        if (statusResponse.state === "COMPLETED") {
+          transaction.paymentStatus = "SUCCESS";
+          if (transaction.Order) {
+            transaction.Order.paymentStatus = "paid";
+            await transaction.Order.save();
+          }
+        } else if (statusResponse.state === "FAILED") {
+          transaction.paymentStatus = "FAILED";
+          if (transaction.Order) {
+            transaction.Order.paymentStatus = "failed";
+            await transaction.Order.save();
+          }
+        }
+        
+        await transaction.save();
+      } catch (statusError) {
+        console.log("PhonePe status check failed:", statusError.message);
+      }
+    }
+    
+    res.status(200).json({
+      success: true,
+      data: {
+        transaction: {
+          id: transaction.id,
+          transactionId: transaction.transactionId,
+          merchantTransactionId: transaction.merchantTransactionId,
+          amount: transaction.amount,
+          paymentStatus: transaction.paymentStatus,
+          createdAt: transaction.createdAt,
+          updatedAt: transaction.updatedAt
+        },
+        order: transaction.Order ? {
+          id: transaction.Order.id,
+          totalPrice: transaction.Order.totalPrice,
+          paymentStatus: transaction.Order.paymentStatus,
+          paymentMethod: transaction.Order.paymentMethod
+        } : null
+      }
+    });
+    
+  } catch (error) {
+    console.error("Verify payment error:", error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to verify payment",
+      error: error.message
+    });
+  }
+};

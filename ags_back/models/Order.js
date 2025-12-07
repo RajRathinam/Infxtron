@@ -33,8 +33,8 @@ const Order = sequelize.define("Order", {
     allowNull: false,
   },
   paymentMethod: {
-    type: DataTypes.ENUM("whatsapp", "phonepay", "cash_on_delivery"),
-    defaultValue: "whatsapp"
+    type: DataTypes.ENUM("phonepay", "cash_on_delivery"),
+    defaultValue: "phonepay"
   },
   paymentStatus: {
     type: DataTypes.STRING,

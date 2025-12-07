@@ -6,7 +6,8 @@ import {
   getPaymentStatus,
   checkPhonePeConfig,
   updatePaymentStatus,  // For testing
-  testPayment          // For testing
+  testPayment,          // For testing
+  verifyPayment
 } from "../controllers/paymentController.js";
 
 const router = express.Router();
@@ -16,6 +17,7 @@ router.post("/initiate", initiatePayment);
 router.post("/callback", paymentCallback);
 router.get("/status/:transactionId", getPaymentStatus);
 router.post("/update-status", updatePaymentStatus);  // Manual update for testing
-router.post("/test", testPayment);                   // Test endpoint
+router.post("/test", testPayment);    
+router.post("/verify", verifyPayment);
 
 export default router;

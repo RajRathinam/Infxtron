@@ -11,6 +11,8 @@ import orderRoutes from "./routes/orderRoutes.js";
 import customerRoutes from "./routes/customerRoutes.js";
 import offerRoutes from "./routes/offerRoutes.js";
 import paymentRoutes from "./routes/paymentRoutes.js";
+import transactionRoutes from "./routes/transactionRoutes.js";
+
 import { seedAdmin } from "./seeders/adminSeeder.js";
 
 dotenv.config();
@@ -45,7 +47,7 @@ app.use(
       }
     },
     credentials: true,
-    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+    methods: ['GET', 'POST', 'PUT', 'DELETE','PATCH', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization', 'Cookie']
   })
 );
@@ -89,6 +91,8 @@ app.use("/api/orders", orderRoutes);
 app.use("/api/customers", customerRoutes);
 app.use("/api/offers", offerRoutes);
 app.use("/api/payments", paymentRoutes);
+app.use("/api/transactions", transactionRoutes);
+
 
 sequelize
   .authenticate()
