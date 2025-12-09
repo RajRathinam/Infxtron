@@ -48,16 +48,10 @@ const escapeMarkdown = (text) => {
   return textStr.replace(/[_*\[\]()~`>#+\-=|{}.!:-]/g, '\\$&');
 };
 
-// Function to send successful payment notification to Telegram
+// Fix the sendSuccessfulPaymentNotification function
 const sendSuccessfulPaymentNotification = async (order, transaction) => {
   if (!telegramBot || !TELEGRAM_CHAT_ID) {
     console.log('⚠️ Telegram not configured for notifications');
-    return false;
-  }
-
-  // Check if notification was already sent (from database)
-  if (transaction.telegramNotificationSent) {
-    console.log(`⚠️ Telegram notification already sent for ${transaction.transactionId}`);
     return false;
   }
 
@@ -68,6 +62,8 @@ const sendSuccessfulPaymentNotification = async (order, transaction) => {
     // SIMPLIFIED MESSAGE - Using plain text to avoid Markdown issues
     let message = `✅ PAYMENT SUCCESSFUL!\n\n`;
     message += `Order ID: #${order.id}\n`;
+    message += `Transaction ID: ${transaction.transactionId}\n`;
+    message += `Amount: ₹${order.totalPrice}\n`;
     message += `Payment Method: ${order.paymentMethod}\n`;
     message += `Time: ${new Date().toLocaleString()}\n`;
     
@@ -83,25 +79,46 @@ const sendSuccessfulPaymentNotification = async (order, transaction) => {
     // Delivery details
     message += `\nDelivery Details:\n`;
     message += `🏠 Delivery Address: ${order.deliveryAddress || 'N/A'}\n`;
+    message += `🚚 Delivery Point: ${order.deliveryPoint || 'N/A'}\n`;
     message += `📅 Delivery Date: ${new Date(order.deliveryDate).toLocaleDateString()}\n`;
     message += `💰 Delivery Charge: ₹${order.deliveryCharge || 0}\n`;
     
-    // Products
+    // Products - FIXED: Handle cases where products might be JSON string
     message += `\nProducts:\n`;
-    const products = order.products || [];
-    if (products.length === 0) {
-      message += `No products listed\n`;
-    } else {
-      let totalItems = 0;
-      products.forEach((product, index) => {
-        const name = product.name || 'Product';
-        const price = product.price || 0;
-        const quantity = product.quantity || 1;
-        totalItems += quantity;
-        message += `${index + 1}. ${name} - ${quantity} × ₹${price} = ₹${price * quantity}\n`;
-      });
-      message += `\nTotal Items: ${totalItems}\n`;
-      message += `Total Amount: ₹${order.totalPrice}\n`;
+    
+    try {
+      // Parse products if it's a JSON string
+      let products = order.products;
+      if (typeof products === 'string') {
+        try {
+          products = JSON.parse(products);
+        } catch (parseError) {
+          console.error('Failed to parse products JSON:', parseError);
+          products = [];
+        }
+      }
+      
+      // Ensure products is an array
+      if (!Array.isArray(products)) {
+        products = [];
+      }
+      
+      if (products.length === 0) {
+        message += `No products listed\n`;
+      } else {
+        let totalItems = 0;
+        products.forEach((product, index) => {
+          const name = product.name || product.productName || 'Product';
+          const price = product.price || product.singleOrder || 0;
+          const quantity = product.quantity || 1;
+          totalItems += quantity;
+          message += `${index + 1}. ${name} - ${quantity} × ₹${price} = ₹${price * quantity}\n`;
+        });
+        message += `\nTotal Items: ${totalItems}\n`;
+      }
+    } catch (productsError) {
+      console.error('Error processing products:', productsError);
+      message += `Error loading products\n`;
     }
     
     message += `\nOrder Status: ${order.status || 'N/A'}\n`;
@@ -113,11 +130,6 @@ const sendSuccessfulPaymentNotification = async (order, transaction) => {
     // Send to Telegram as PLAIN TEXT (no Markdown)
     await telegramBot.sendMessage(TELEGRAM_CHAT_ID, message);
     
-    // Update transaction to mark notification as sent
-    await transaction.update({
-      telegramNotificationSent: true
-    });
-    
     console.log(`✅ Successful payment notification sent to Telegram`);
     return true;
     
@@ -126,7 +138,6 @@ const sendSuccessfulPaymentNotification = async (order, transaction) => {
     return false;
   }
 };
-
 // PhonePe Configuration - Simplified for testing
 const PHONEPE_CONFIG = {
   clientId: process.env.PHONEPE_CLIENT_ID || 'TEST_CLIENT_ID',
