@@ -7,7 +7,8 @@ import {
   checkPhonePeConfig,
   updatePaymentStatus,  // For testing
   testPayment,          // For testing
-  verifyPayment
+  verifyPayment,
+  testTelegram          // Add this import
 } from "../controllers/paymentController.js";
 
 const router = express.Router();
@@ -19,5 +20,6 @@ router.get("/status/:transactionId", getPaymentStatus);
 router.post("/update-status", updatePaymentStatus);  // Manual update for testing
 router.post("/test", testPayment);    
 router.post("/verify", verifyPayment);
+router.post("/test-telegram", testTelegram);  // Add this new route
 
 export default router;

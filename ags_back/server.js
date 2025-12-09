@@ -34,7 +34,7 @@ app.use(
     origin: function (origin, callback) {
       // List of allowed origins
       const allowedOrigins = [
-        "https://agshealthyfoods.in"
+        "http://localhost:5173"
       ];
       
       // Allow requests with no origin (like mobile apps, Postman, etc.)

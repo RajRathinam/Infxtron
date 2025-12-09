@@ -1,6 +1,7 @@
 // controllers/paymentController.js
 import Order from "../models/Order.js";
 import Transaction from "../models/Transaction.js";
+import Customer from "../models/Customer.js";
 
 // Try to load PhonePe SDK
 let PhonePeSDK;
@@ -14,6 +15,117 @@ try {
   console.log('💡 Run: npm install pg-sdk-node');
   PhonePeSDK = null;
 }
+
+// ==== TELEGRAM NOTIFICATION SETUP ====
+let telegramBot = null;
+const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
+const TELEGRAM_CHAT_ID = process.env.YOUR_CHAT_ID;
+
+// Initialize Telegram bot
+const initTelegramBot = async () => {
+  if (!TELEGRAM_BOT_TOKEN || !TELEGRAM_CHAT_ID) {
+    console.log('⚠️ Telegram bot not configured. Add TELEGRAM_BOT_TOKEN and YOUR_CHAT_ID to .env');
+    return;
+  }
+
+  try {
+    const TelegramBot = (await import('node-telegram-bot-api')).default;
+    telegramBot = new TelegramBot(TELEGRAM_BOT_TOKEN, { polling: false });
+    console.log('✅ Telegram bot initialized for notifications');
+  } catch (error) {
+    console.error('❌ Failed to initialize Telegram bot:', error.message);
+  }
+};
+
+// Initialize once
+initTelegramBot();
+
+// Helper function to escape Markdown special characters
+const escapeMarkdown = (text) => {
+  if (!text) return '';
+  const textStr = String(text);
+  // Escape all special characters for MarkdownV2
+  return textStr.replace(/[_*\[\]()~`>#+\-=|{}.!:-]/g, '\\$&');
+};
+
+// Function to send successful payment notification to Telegram
+const sendSuccessfulPaymentNotification = async (order, transaction) => {
+  if (!telegramBot || !TELEGRAM_CHAT_ID) {
+    console.log('⚠️ Telegram not configured for notifications');
+    return false;
+  }
+
+  // Check if notification was already sent (from database)
+  if (transaction.telegramNotificationSent) {
+    console.log(`⚠️ Telegram notification already sent for ${transaction.transactionId}`);
+    return false;
+  }
+
+  try {
+    // Find customer details
+    const customer = await Customer.findByPk(order.customerId);
+    
+    // SIMPLIFIED MESSAGE - Using plain text to avoid Markdown issues
+    let message = `✅ PAYMENT SUCCESSFUL!\n\n`;
+    message += `Order ID: #${order.id}\n`;
+    message += `Payment Method: ${order.paymentMethod}\n`;
+    message += `Time: ${new Date().toLocaleString()}\n`;
+    
+    // Customer details
+    if (customer) {
+      message += `\nCustomer Details:\n`;
+      message += `👤 Name: ${customer.name || 'N/A'}\n`;
+      message += `📱 Phone: ${customer.phone || 'N/A'}\n`;
+      if (customer.email) message += `📧 Email: ${customer.email}\n`;
+      if (customer.address) message += `📍 Address: ${customer.address}\n`;
+    }
+    
+    // Delivery details
+    message += `\nDelivery Details:\n`;
+    message += `🏠 Delivery Address: ${order.deliveryAddress || 'N/A'}\n`;
+    message += `📅 Delivery Date: ${new Date(order.deliveryDate).toLocaleDateString()}\n`;
+    message += `💰 Delivery Charge: ₹${order.deliveryCharge || 0}\n`;
+    
+    // Products
+    message += `\nProducts:\n`;
+    const products = order.products || [];
+    if (products.length === 0) {
+      message += `No products listed\n`;
+    } else {
+      let totalItems = 0;
+      products.forEach((product, index) => {
+        const name = product.name || 'Product';
+        const price = product.price || 0;
+        const quantity = product.quantity || 1;
+        totalItems += quantity;
+        message += `${index + 1}. ${name} - ${quantity} × ₹${price} = ₹${price * quantity}\n`;
+      });
+      message += `\nTotal Items: ${totalItems}\n`;
+      message += `Total Amount: ₹${order.totalPrice}\n`;
+    }
+    
+    message += `\nOrder Status: ${order.status || 'N/A'}\n`;
+    message += `---\n`;
+    message += `🔄 Next Step: Process the order for delivery`;
+    
+    console.log('📤 Sending Telegram message (plain text)');
+    
+    // Send to Telegram as PLAIN TEXT (no Markdown)
+    await telegramBot.sendMessage(TELEGRAM_CHAT_ID, message);
+    
+    // Update transaction to mark notification as sent
+    await transaction.update({
+      telegramNotificationSent: true
+    });
+    
+    console.log(`✅ Successful payment notification sent to Telegram`);
+    return true;
+    
+  } catch (error) {
+    console.error('❌ Failed to send Telegram notification:', error.message);
+    return false;
+  }
+};
 
 // PhonePe Configuration - Simplified for testing
 const PHONEPE_CONFIG = {
@@ -63,7 +175,9 @@ export const checkPhonePeConfig = async (req, res) => {
       clientId: hasClientId ? 'Configured' : 'Missing',
       clientSecret: hasClientSecret ? 'Configured' : 'Missing',
       environment: PHONEPE_CONFIG.environment,
-      clientVersion: PHONEPE_CONFIG.clientVersion
+      clientVersion: PHONEPE_CONFIG.clientVersion,
+      telegramConfigured: !!(TELEGRAM_BOT_TOKEN && TELEGRAM_CHAT_ID),
+      telegramBot: telegramBot ? 'Ready' : 'Not ready'
     };
     
     if (!isSDKLoaded || !hasClientId || !hasClientSecret) {
@@ -340,7 +454,7 @@ export const getPaymentStatus = async (req, res) => {
   }
 };
 
-// Manual Payment Status Update (For Testing)
+// Manual Payment Status Update (For Testing) - NO TELEGRAM NOTIFICATION
 export const updatePaymentStatus = async (req, res) => {
   try {
     const { transactionId, status } = req.body;
@@ -454,8 +568,7 @@ export const testPayment = async (req, res) => {
   }
 };
 
-// Add this to your paymentController.js
-
+// Update the verifyPayment function:
 export const verifyPayment = async (req, res) => {
   try {
     const { orderId, transactionId } = req.body;
@@ -482,6 +595,33 @@ export const verifyPayment = async (req, res) => {
       });
     }
     
+    // If transaction is already SUCCESS, don't send notification again
+    if (transaction.paymentStatus === "SUCCESS") {
+      console.log('ℹ️ Payment already marked as SUCCESS, skipping notification');
+      
+      res.status(200).json({
+        success: true,
+        data: {
+          transaction: {
+            id: transaction.id,
+            transactionId: transaction.transactionId,
+            merchantTransactionId: transaction.merchantTransactionId,
+            amount: transaction.amount,
+            paymentStatus: transaction.paymentStatus,
+            createdAt: transaction.createdAt,
+            updatedAt: transaction.updatedAt
+          },
+          order: transaction.Order ? {
+            id: transaction.Order.id,
+            totalPrice: transaction.Order.totalPrice,
+            paymentStatus: transaction.Order.paymentStatus,
+            paymentMethod: transaction.Order.paymentMethod
+          } : null
+        }
+      });
+      return;
+    }
+    
     // If transaction is still pending, check with PhonePe
     if (transaction.paymentStatus === "PENDING" && transaction.merchantTransactionId) {
       try {
@@ -497,6 +637,9 @@ export const verifyPayment = async (req, res) => {
           if (transaction.Order) {
             transaction.Order.paymentStatus = "paid";
             await transaction.Order.save();
+            
+            // SEND TELEGRAM NOTIFICATION FOR SUCCESSFUL PAYMENT
+            await sendSuccessfulPaymentNotification(transaction.Order, transaction);
           }
         } else if (statusResponse.state === "FAILED") {
           transaction.paymentStatus = "FAILED";
@@ -539,6 +682,43 @@ export const verifyPayment = async (req, res) => {
       success: false,
       message: "Failed to verify payment",
       error: error.message
+    });
+  }
+};
+
+// Also update the testTelegram function to use plain text:
+export const testTelegram = async (req, res) => {
+  try {
+    if (!telegramBot || !TELEGRAM_CHAT_ID) {
+      return res.status(200).json({
+        success: false,
+        message: "Telegram not configured",
+        required: {
+          TELEGRAM_BOT_TOKEN: TELEGRAM_BOT_TOKEN ? "Set" : "Missing",
+          YOUR_CHAT_ID: TELEGRAM_CHAT_ID ? "Set" : "Missing"
+        }
+      });
+    }
+    
+    const testMessage = `🔔 Test Notification\n\n` +
+      `This is a test from your payment system!\n` +
+      `Time: ${new Date().toLocaleString()}\n` +
+      `Status: ✅ Working`;
+    
+    await telegramBot.sendMessage(TELEGRAM_CHAT_ID, testMessage);
+    
+    res.status(200).json({
+      success: true,
+      message: "Test notification sent to Telegram!",
+      sentTo: TELEGRAM_CHAT_ID
+    });
+    
+  } catch (error) {
+    console.error("Test Telegram error:", error);
+    res.status(500).json({
+      success: false,
+      error: error.message,
+      note: "Check your .env file configuration"
     });
   }
 };

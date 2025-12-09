@@ -14,13 +14,13 @@ const Transaction = sequelize.define("Transaction", {
   },
   transactionId: {
     type: DataTypes.STRING,
-    unique: true,
     allowNull: false
+    // REMOVED: unique: true (handled in indexes below)
   },
   merchantTransactionId: {
     type: DataTypes.STRING,
-    unique: true,
     allowNull: false
+    // REMOVED: unique: true (handled in indexes below)
   },
   amount: {
     type: DataTypes.INTEGER, // Amount in paise
@@ -54,14 +54,20 @@ const Transaction = sequelize.define("Transaction", {
   redirectUrl: {
     type: DataTypes.TEXT,
     allowNull: true
+  },
+  telegramNotificationSent: {
+    type: DataTypes.BOOLEAN,
+    defaultValue: false
   }
 }, {
   indexes: [
     {
-      fields: ['transactionId']
+      fields: ['transactionId'],
+      unique: true  // ADD unique constraint here instead
     },
     {
-      fields: ['merchantTransactionId']
+      fields: ['merchantTransactionId'],
+      unique: true  // ADD unique constraint here instead
     },
     {
       fields: ['orderId']
