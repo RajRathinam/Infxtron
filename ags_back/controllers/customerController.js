@@ -43,16 +43,7 @@ export const createCustomer = async (req, res) => {
       });
     }
 
-    // Check for duplicate phone number
-    const existingCustomer = await Customer.findOne({ 
-      where: { phone } 
-    });
 
-    if (existingCustomer) {
-      return res.status(409).json({ 
-        message: "Customer with this phone number already exists" 
-      });
-    }
 
     const newCustomer = await Customer.create({
       name: name.trim(),
