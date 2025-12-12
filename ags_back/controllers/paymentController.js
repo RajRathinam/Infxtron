@@ -2,11 +2,13 @@
 import Order from "../models/Order.js";
 import Transaction from "../models/Transaction.js";
 import Customer from "../models/Customer.js";
+import telegramService from '../services/telegramService.js';
+
+
 
 // Try to load PhonePe SDK
 let PhonePeSDK;
 try {
-  // For ES modules, use import() function
   const sdkModule = await import('pg-sdk-node');
   PhonePeSDK = sdkModule.default || sdkModule;
   console.log('✅ PhonePe SDK loaded successfully');
@@ -16,197 +18,7 @@ try {
   PhonePeSDK = null;
 }
 
-// ==== TELEGRAM NOTIFICATION SETUP ====
-let telegramBot = null;
-const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
-const TELEGRAM_CHAT_ID = process.env.YOUR_CHAT_ID;
-
-// Initialize Telegram bot
-const initTelegramBot = async () => {
-  if (!TELEGRAM_BOT_TOKEN || !TELEGRAM_CHAT_ID) {
-    console.log('⚠️ Telegram bot not configured. Add TELEGRAM_BOT_TOKEN and YOUR_CHAT_ID to .env');
-    return;
-  }
-
-  try {
-    const TelegramBot = (await import('node-telegram-bot-api')).default;
-    telegramBot = new TelegramBot(TELEGRAM_BOT_TOKEN, { polling: false });
-    console.log('✅ Telegram bot initialized for notifications');
-  } catch (error) {
-    console.error('❌ Failed to initialize Telegram bot:', error.message);
-  }
-};
-
-// Initialize once
-initTelegramBot();
-
-// Helper function to escape Markdown special characters
-const escapeMarkdown = (text) => {
-  if (!text) return '';
-  const textStr = String(text);
-  // Escape all special characters for MarkdownV2
-  return textStr.replace(/[_*\[\]()~`>#+\-=|{}.!:-]/g, '\\$&');
-};
-
-// Set to track pending notifications and prevent duplicates
-const pendingNotifications = new Set();
-
-// Function to send successful payment notification to Telegram - UPDATED
-const sendSuccessfulPaymentNotification = async (order, transaction) => {
-  // Early exit if Telegram is not configured
-  if (!telegramBot || !TELEGRAM_CHAT_ID) {
-    console.log('⚠️ Telegram not configured for notifications');
-    return false;
-  }
-
-  // Create a unique key for this notification
-  const notificationKey = `notify_${transaction.transactionId}`;
-  
-  // Check if notification is already being processed
-  if (pendingNotifications.has(notificationKey)) {
-    console.log(`⚠️ Notification already being processed for ${transaction.transactionId}`);
-    return false;
-  }
-
-  try {
-    // Add to pending set to prevent concurrent processing
-    pendingNotifications.add(notificationKey);
-    
-    // Check database flag FIRST (before doing any other work)
-    const freshTransaction = await Transaction.findByPk(transaction.id);
-    if (freshTransaction.telegramNotificationSent) {
-      console.log(`✅ Telegram notification already sent (database check) for ${transaction.transactionId}`);
-      return false;
-    }
-    
-    // Immediately update the database flag BEFORE sending notification
-    await freshTransaction.update({
-      telegramNotificationSent: true
-    });
-    
-    console.log(`📝 Marked notification as sent in database for ${transaction.transactionId}`);
-    
-    // Find customer details
-    const customer = await Customer.findByPk(order.customerId);
-    
-    // Parse products from JSON string/object
-    let products = [];
-    try {
-      if (typeof order.products === 'string') {
-        products = JSON.parse(order.products);
-      } else if (Array.isArray(order.products)) {
-        products = order.products;
-      }
-    } catch (parseError) {
-      console.error('Error parsing products:', parseError);
-      products = [];
-    }
-    
-    // Calculate totals from products
-    let totalItems = 0;
-    let productsTotal = 0;
-    products.forEach((product) => {
-      const price = product.price || 0;
-      const quantity = product.quantity || 1;
-      totalItems += quantity;
-      productsTotal += price * quantity;
-    });
-    
-    // Calculate subtotal (products total without delivery)
-    const subtotal = productsTotal;
-    const deliveryCharge = order.deliveryCharge || 0;
-    const grandTotal = order.totalPrice || (productsTotal + deliveryCharge);
-    
-    // SIMPLIFIED MESSAGE - Using plain text to avoid Markdown issues
-    let message = `✅ PAYMENT SUCCESSFUL!\n\n`;
-    message += `Order ID: #${order.id}\n`;
-    message += `Transaction ID: ${transaction.transactionId}\n`;
-    message += `Payment Method: ${order.paymentMethod || 'phonepay'}\n`;
-    message += `Time: ${new Date().toLocaleString()}\n`;
-    
-    // Customer details
-    if (customer) {
-      message += `\nCustomer Details:\n`;
-      message += `👤 Name: ${customer.name || order.name || 'N/A'}\n`;
-      message += `📱 Phone: ${customer.phone || order.phone || 'N/A'}\n`;
-      if (customer.email || order.email) message += `📧 Email: ${customer.email || order.email || ''}\n`;
-      if (customer.address || order.address) message += `📍 Address: ${customer.address || order.address || ''}\n`;
-    } else {
-      // Fallback to order details if customer not found
-      message += `\nCustomer Details:\n`;
-      message += `👤 Name: ${order.name || 'N/A'}\n`;
-      message += `📱 Phone: ${order.phone || 'N/A'}\n`;
-      if (order.email) message += `📧 Email: ${order.email}\n`;
-      if (order.address) message += `📍 Address: ${order.address}\n`;
-    }
-    
-    // Delivery details
-    message += `\nDelivery Details:\n`;
-    message += `🏠 Delivery Address: ${order.deliveryAddress || order.address || 'N/A'}\n`;
-    message += `📅 Delivery Date: ${order.deliveryDate ? new Date(order.deliveryDate).toLocaleDateString('en-IN') : 'N/A'}\n`;
-    message += `💰 Delivery Charge: ₹${deliveryCharge}\n`;
-    
-    // Products - Now with proper product names
-    message += `\nProducts:\n`;
-    if (products.length === 0) {
-      message += `No products listed\n`;
-    } else {
-      products.forEach((product, index) => {
-        // Use the actual product name from the parsed data
-        const name = product.productName || product.name || 'Product';
-        const price = product.price || 0;
-        const quantity = product.quantity || 1;
-        const packName = product.packName ? `(${product.packName})` : '';
-        const itemTotal = price * quantity;
-        message += `${index + 1}. ${name} ${packName} - ${quantity} × ₹${price} = ₹${itemTotal}\n`;
-      });
-      message += `\nTotal Items: ${totalItems}\n`;
-      message += `Products Total: ₹${productsTotal}\n`;
-    }
-    
-    // Order summary
-    message += `\nOrder Summary:\n`;
-    message += `Subtotal: ₹${subtotal}\n`;
-    message += `Delivery: ₹${deliveryCharge}\n`;
-    message += `Grand Total: ₹${grandTotal}\n`;
-    
-    message += `\nOrder Status: ${order.status || 'order taken'}\n`;
-    message += `---\n`;
-    message += `🔄 Next Step: Process the order for delivery`;
-    
-    console.log('📤 Sending Telegram message (plain text)');
-    console.log('Products data:', products);
-    console.log('Order total from DB:', order.totalPrice);
-    console.log('Calculated grand total:', grandTotal);
-    
-    // Send to Telegram as PLAIN TEXT (no Markdown)
-    await telegramBot.sendMessage(TELEGRAM_CHAT_ID, message);
-    
-    console.log(`✅ Successful payment notification sent to Telegram for ${transaction.transactionId}`);
-    return true;
-    
-  } catch (error) {
-    console.error('❌ Failed to send Telegram notification:', error.message);
-    console.error('Full error:', error);
-    
-    // If sending failed, reset the database flag
-    try {
-      await Transaction.update(
-        { telegramNotificationSent: false },
-        { where: { id: transaction.id } }
-      );
-      console.log(`🔄 Reset notification flag for ${transaction.transactionId} due to error`);
-    } catch (rollbackError) {
-      console.error('Failed to reset notification flag:', rollbackError);
-    }
-    
-    return false;
-  } finally {
-    // Always remove from pending set
-    pendingNotifications.delete(notificationKey);
-  }
-};
-// PhonePe Configuration - Simplified for testing
+// PhonePe Configuration
 const PHONEPE_CONFIG = {
   clientId: process.env.PHONEPE_CLIENT_ID || 'TEST_CLIENT_ID',
   clientSecret: process.env.PHONEPE_CLIENT_SECRET || 'TEST_CLIENT_SECRET',
@@ -242,6 +54,124 @@ const getPhonePeClient = () => {
   return phonePeClient;
 };
 
+// Set to track pending verifications
+const pendingVerifications = new Set();
+const pendingNotifications = new Set();
+
+// Function to send successful payment notification
+// controllers/paymentController.js - Update the notification function
+const sendSuccessfulPaymentNotification = async (order, transaction) => {
+  const notificationKey = `notify_${transaction.transactionId}`;
+  
+  console.log(`📨 Attempting notification for transaction: ${transaction.transactionId}`);
+  console.log(`   Order ID: ${order.id}, Amount: ${transaction.amount}`);
+  
+  if (pendingNotifications.has(notificationKey)) {
+    console.log(`⚠️ Notification already being processed for ${transaction.transactionId}`);
+    return false;
+  }
+
+  try {
+    pendingNotifications.add(notificationKey);
+    
+    // Check if Telegram is ready
+    if (!telegramService.isReady) {
+      console.error('❌ Telegram service not ready');
+      await telegramService.init(); // Try to initialize
+      
+      if (!telegramService.isReady) {
+        console.error('❌ Telegram initialization failed');
+        return false;
+      }
+    }
+    
+    // Check database flag
+    const freshTransaction = await Transaction.findByPk(transaction.id);
+    if (freshTransaction.telegramNotificationSent) {
+      console.log(`✅ Telegram notification already sent for ${transaction.transactionId}`);
+      return true;
+    }
+    
+    // IMPORTANT: Fetch order with Customer included
+    const orderWithCustomer = await Order.findByPk(order.id, {
+      include: [
+        {
+          model: Customer,
+          attributes: ['id', 'name', 'phone', 'address'] // Explicitly include these fields
+        }
+      ]
+    });
+    
+    if (!orderWithCustomer) {
+      console.error(`❌ Order ${order.id} not found`);
+      return false;
+    }
+    
+    // Get customer data from the included relationship
+    let customerName = 'Not specified';
+    let customerPhone = 'Not specified';
+    let customerAddress = 'Not specified';
+    
+    if (orderWithCustomer.Customer) {
+      customerName = orderWithCustomer.Customer.name || 'Not specified';
+      customerPhone = orderWithCustomer.Customer.phone || 'Not specified';
+      customerAddress = orderWithCustomer.Customer.address || 'Not specified';
+    }
+    
+    // Add customer info to order object for the formatter
+    orderWithCustomer.name = customerName;
+    orderWithCustomer.phone = customerPhone;
+    orderWithCustomer.address = customerAddress;
+    
+    // If products data is stored as JSON string, parse it
+    let productsData = [];
+    try {
+      if (typeof orderWithCustomer.products === 'string') {
+        productsData = JSON.parse(orderWithCustomer.products);
+      } else if (Array.isArray(orderWithCustomer.products)) {
+        productsData = orderWithCustomer.products;
+      }
+      
+      // Add products to order object for formatting
+      orderWithCustomer.products = productsData;
+    } catch (parseError) {
+      console.error('❌ Error parsing products:', parseError);
+    }
+    
+    // Format message
+    const message = telegramService.formatPaymentSuccess(orderWithCustomer, transaction);
+    console.log(`📝 Formatted message length: ${message.length} characters`);
+    console.log(`👤 Customer Name: ${customerName}`);
+    console.log(`📱 Customer Phone: ${customerPhone}`);
+    console.log(`📍 Customer Address: ${customerAddress}`);
+    
+    // Send notification
+    const sent = await telegramService.sendMessage(message);
+    
+    if (sent) {
+      // Update database flag
+      await freshTransaction.update({
+        telegramNotificationSent: true,
+        telegramSentAt: new Date()
+      });
+      
+      console.log(`✅ Payment notification sent to Telegram for ${transaction.transactionId}`);
+      return true;
+    } else {
+      console.error(`❌ Failed to send Telegram message for ${transaction.transactionId}`);
+      return false;
+    }
+    
+  } catch (error) {
+    console.error('❌ Failed to send payment notification:', error);
+    console.error('Stack trace:', error.stack);
+    
+    // Don't reset flag on error - we want to retry
+    return false;
+  } finally {
+    pendingNotifications.delete(notificationKey);
+  }
+};
 // Check if PhonePe is configured
 export const checkPhonePeConfig = async (req, res) => {
   try {
@@ -255,8 +185,7 @@ export const checkPhonePeConfig = async (req, res) => {
       clientSecret: hasClientSecret ? 'Configured' : 'Missing',
       environment: PHONEPE_CONFIG.environment,
       clientVersion: PHONEPE_CONFIG.clientVersion,
-      telegramConfigured: !!(TELEGRAM_BOT_TOKEN && TELEGRAM_CHAT_ID),
-      telegramBot: telegramBot ? 'Ready' : 'Not ready'
+      telegramConfigured: telegramService.initialized
     };
     
     if (!isSDKLoaded || !hasClientId || !hasClientSecret) {
@@ -276,7 +205,6 @@ export const checkPhonePeConfig = async (req, res) => {
       });
     }
     
-    // Try to create client to test credentials
     const client = getPhonePeClient();
     if (!client) {
       throw new Error("Failed to create PhonePe client");
@@ -304,12 +232,11 @@ export const checkPhonePeConfig = async (req, res) => {
   }
 };
 
-// Initiate PhonePe Payment (Testing Version)
+// Initiate PhonePe Payment
 export const initiatePayment = async (req, res) => {
   try {
     const { orderId, amount, customerPhone, customerEmail } = req.body;
 
-    // Validate required fields
     if (!orderId || !amount) {
       return res.status(400).json({ 
         success: false,
@@ -317,7 +244,6 @@ export const initiatePayment = async (req, res) => {
       });
     }
 
-    // Check if SDK is loaded
     if (!PhonePeSDK) {
       return res.status(500).json({
         success: false,
@@ -326,7 +252,6 @@ export const initiatePayment = async (req, res) => {
       });
     }
 
-    // Get PhonePe client
     const client = getPhonePeClient();
     if (!client) {
       return res.status(500).json({
@@ -336,7 +261,6 @@ export const initiatePayment = async (req, res) => {
       });
     }
 
-    // Find the order
     const order = await Order.findByPk(orderId);
     if (!order) {
       return res.status(404).json({ 
@@ -345,7 +269,6 @@ export const initiatePayment = async (req, res) => {
       });
     }
 
-    // Check if order is already paid
     if (order.paymentStatus === "paid" || order.paymentStatus === "completed") {
       return res.status(400).json({ 
         success: false,
@@ -353,11 +276,9 @@ export const initiatePayment = async (req, res) => {
       });
     }
 
-    // Generate transaction IDs
     const transactionId = generateTransactionId();
     const merchantTransactionId = generateMerchantTransactionId();
 
-    // Create transaction record - Initialize notification flag as false
     const transaction = await Transaction.create({
       orderId: order.id,
       transactionId: transactionId,
@@ -365,27 +286,24 @@ export const initiatePayment = async (req, res) => {
       amount: amount,
       paymentStatus: "PENDING",
       paymentGateway: "PHONEPE",
-      telegramNotificationSent: false // Explicitly set to false
+      telegramNotificationSent: false
     });
 
-    // Update order
     await order.update({
       paymentMethod: "phonepay",
       transactionId: transactionId,
       paymentStatus: "pending"
     });
 
-    // Prepare metadata
     const metaInfo = PhonePeSDK.MetaInfo.builder()
       .udf1(order.name || 'Customer')
       .udf2(order.phone || customerPhone || '')
       .udf3(order.email || customerEmail || '')
       .build();
 
-    // Create payment request
     const request = PhonePeSDK.StandardCheckoutPayRequest.builder()
       .merchantOrderId(merchantTransactionId)
-      .amount(amount * 100) // Convert to paise
+      .amount(amount * 100)
       .redirectUrl(`${process.env.FRONTEND_URL || 'http://localhost:3000'}/payment-result?order=${orderId}&transaction=${transactionId}`)
       .metaInfo(metaInfo)
       .build();
@@ -397,22 +315,16 @@ export const initiatePayment = async (req, res) => {
       environment: PHONEPE_CONFIG.environment
     });
 
-    // Call PhonePe SDK
     const response = await client.pay(request);
-
-    console.log('PhonePe API Response:', response);
 
     if (!response.redirectUrl) {
       throw new Error('Payment URL not received from PhonePe');
     }
 
-    // Update transaction
     await transaction.update({
       redirectUrl: response.redirectUrl,
       gatewayResponse: response
     });
-
-    console.log('✅ Payment initiated successfully');
 
     res.status(200).json({
       success: true,
@@ -424,7 +336,6 @@ export const initiatePayment = async (req, res) => {
         orderId: order.id,
         amount: amount,
         state: response.state || 'PENDING',
-        // For testing - also return mock data
         testInfo: {
           sandboxPhone: "9999999999",
           sandboxOTP: "789456",
@@ -438,7 +349,6 @@ export const initiatePayment = async (req, res) => {
   } catch (error) {
     console.error("❌ Payment initiation error:", error);
     
-    // Return detailed error for debugging
     let errorMessage = "Failed to initiate payment";
     let errorDetails = {};
     
@@ -448,42 +358,19 @@ export const initiatePayment = async (req, res) => {
       errorMessage = "Invalid PhonePe credentials";
       errorDetails = {
         issue: "Credentials mismatch",
-        check: "Verify .env file has correct credentials",
-        where: "PhonePe Dashboard → Developer Settings"
+        check: "Verify .env file has correct credentials"
       };
     } else if (error.message.includes('network') || error.message.includes('timeout')) {
       errorMessage = "Network error connecting to PhonePe";
-      errorDetails = {
-        issue: "Network connectivity",
-        check: "Check internet connection and firewall"
-      };
     }
     
     res.status(500).json({ 
       success: false,
       message: errorMessage, 
       error: error.message,
-      details: errorDetails,
-      debug: {
-        clientId: PHONEPE_CONFIG.clientId ? 'Present' : 'Missing',
-        environment: PHONEPE_CONFIG.environment,
-        sdkLoaded: !!PhonePeSDK
-      }
+      details: errorDetails
     });
   }
-};
-
-// Mock Payment Callback for Testing (No webhook needed)
-export const paymentCallback = async (req, res) => {
-  console.log('📥 Mock PhonePe Callback (For Testing)');
-  console.log('Body:', req.body);
-  
-  // For testing, accept any callback
-  res.status(200).json({
-    success: true,
-    message: "Callback received (Testing Mode)",
-    note: "In production, PhonePe will send real webhooks here"
-  });
 };
 
 // Check Payment Status
@@ -535,7 +422,191 @@ export const getPaymentStatus = async (req, res) => {
   }
 };
 
-// Manual Payment Status Update (For Testing) - NO TELEGRAM NOTIFICATION
+// Update the verifyPayment function - Fix the notification sending logic
+export const verifyPayment = async (req, res) => {
+  let verificationKey = null;
+  
+  try {
+    const { orderId, transactionId } = req.body;
+    
+    if (!orderId && !transactionId) {
+      return res.status(400).json({
+        success: false,
+        message: "Either orderId or transactionId is required"
+      });
+    }
+    
+    verificationKey = transactionId || `order_${orderId}`;
+    
+    if (pendingVerifications.has(verificationKey)) {
+      return res.status(200).json({
+        success: true,
+        message: "Verification already in progress",
+        inProgress: true
+      });
+    }
+    
+    pendingVerifications.add(verificationKey);
+    
+    let transaction;
+    let whereClause = {};
+    
+    if (transactionId) {
+      whereClause.transactionId = transactionId;
+    } else if (orderId) {
+      whereClause.orderId = orderId;
+    }
+    
+    // Get the most recent transaction for this order
+    transaction = await Transaction.findOne({
+      where: whereClause,
+      order: [['createdAt', 'DESC']],
+      include: [{
+        model: Order,
+        include: [Customer]
+      }]
+    });
+    
+    if (!transaction) {
+      pendingVerifications.delete(verificationKey);
+      return res.status(404).json({
+        success: false,
+        message: "Transaction not found"
+      });
+    }
+    
+    // If already successful, just return
+    if (transaction.paymentStatus === "SUCCESS") {
+      pendingVerifications.delete(verificationKey);
+      
+      // Check if notification was sent
+      if (!transaction.telegramNotificationSent && transaction.Order) {
+        await sendSuccessfulPaymentNotification(transaction.Order, transaction);
+      }
+      
+      return res.status(200).json({
+        success: true,
+        data: {
+          transaction: {
+            id: transaction.id,
+            transactionId: transaction.transactionId,
+            merchantTransactionId: transaction.merchantTransactionId,
+            amount: transaction.amount,
+            paymentStatus: transaction.paymentStatus,
+            telegramNotificationSent: transaction.telegramNotificationSent
+          }
+        }
+      });
+    }
+    
+    // Only check PhonePe if status is pending
+    if (transaction.paymentStatus === "PENDING" && transaction.merchantTransactionId) {
+      try {
+        const client = getPhonePeClient();
+        if (client) {
+          const statusResponse = await client.getOrderStatus(transaction.merchantTransactionId);
+          
+          console.log('📊 PhonePe Status Response:', JSON.stringify(statusResponse, null, 2));
+          
+          if (statusResponse.state === "COMPLETED" || statusResponse.state === "PAYMENT_SUCCESS") {
+            // Update transaction status
+            await transaction.update({
+              paymentStatus: "SUCCESS",
+              gatewayResponse: statusResponse
+            });
+            
+            // Update order status
+            if (transaction.Order) {
+              await transaction.Order.update({
+                paymentStatus: "paid",
+                updatedAt: new Date()
+              });
+            }
+            
+          } else if (statusResponse.state === "FAILED" || statusResponse.state === "PAYMENT_ERROR") {
+            await transaction.update({
+              paymentStatus: "FAILED",
+              gatewayResponse: statusResponse
+            });
+            
+            if (transaction.Order) {
+              await transaction.Order.update({
+                paymentStatus: "failed",
+                updatedAt: new Date()
+              });
+            }
+          }
+          
+          // Refresh transaction data
+          await transaction.reload();
+        }
+      } catch (statusError) {
+        console.error("❌ PhonePe status check failed:", statusError.message);
+      }
+    }
+    
+    // Send notification if payment succeeded
+    if (transaction.paymentStatus === "SUCCESS" && transaction.Order) {
+      if (!transaction.telegramNotificationSent) {
+        console.log('🔔 Attempting to send Telegram notification...');
+        const notificationSent = await sendSuccessfulPaymentNotification(transaction.Order, transaction);
+        
+        if (notificationSent) {
+          console.log('✅ Telegram notification sent successfully');
+        } else {
+          console.log('❌ Failed to send Telegram notification');
+        }
+      } else {
+        console.log('ℹ️ Telegram notification already sent');
+      }
+    }
+    
+    // Get final updated transaction
+    const finalTransaction = await Transaction.findByPk(transaction.id, {
+      include: [Order]
+    });
+    
+    res.status(200).json({
+      success: true,
+      data: {
+        transaction: {
+          id: finalTransaction.id,
+          transactionId: finalTransaction.transactionId,
+          merchantTransactionId: finalTransaction.merchantTransactionId,
+          amount: finalTransaction.amount,
+          paymentStatus: finalTransaction.paymentStatus,
+          telegramNotificationSent: finalTransaction.telegramNotificationSent,
+          notificationStatus: finalTransaction.telegramNotificationSent ? 'sent' : 'pending'
+        }
+      }
+    });
+    
+  } catch (error) {
+    console.error("❌ Verify payment error:", error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to verify payment",
+      error: error.message
+    });
+  } finally {
+    if (verificationKey) {
+      pendingVerifications.delete(verificationKey);
+    }
+  }
+};
+
+// Mock Payment Callback
+export const paymentCallback = async (req, res) => {
+  console.log('📥 Mock PhonePe Callback (For Testing)');
+  
+  res.status(200).json({
+    success: true,
+    message: "Callback received (Testing Mode)",
+    note: "In production, PhonePe will send real webhooks here"
+  });
+};
+
+// Manual Payment Status Update
 export const updatePaymentStatus = async (req, res) => {
   try {
     const { transactionId, status } = req.body;
@@ -567,13 +638,11 @@ export const updatePaymentStatus = async (req, res) => {
       });
     }
     
-    // Update transaction
     await transaction.update({
       paymentStatus: status,
       updatedAt: new Date()
     });
     
-    // Update order
     if (transaction.Order) {
       const orderStatus = status === 'SUCCESS' ? 'paid' : 
                          status === 'FAILED' ? 'failed' : 'pending';
@@ -604,16 +673,14 @@ export const updatePaymentStatus = async (req, res) => {
   }
 };
 
-// Test Endpoint - Simulate PhonePe Response
+// Test Payment
 export const testPayment = async (req, res) => {
   try {
     const { amount = 100, orderId = 'TEST_ORDER' } = req.body;
     
-    // Generate mock response
     const transactionId = generateTransactionId();
     const merchantTransactionId = generateMerchantTransactionId();
     
-    // Mock PhonePe sandbox URL
     const mockPaymentUrl = PHONEPE_CONFIG.environment === 'SANDBOX'
       ? 'https://sandbox.phonepe.com/test-payment'
       : 'https://phonepe.com/payment';
@@ -649,227 +716,39 @@ export const testPayment = async (req, res) => {
   }
 };
 
-// Set to track pending verifications
-const pendingVerifications = new Set();
-
-// Updated verifyPayment function to prevent duplicate notifications
-export const verifyPayment = async (req, res) => {
-  let verificationKey = null;
-  
-  try {
-    const { orderId, transactionId } = req.body;
-    
-    if (!orderId && !transactionId) {
-      return res.status(400).json({
-        success: false,
-        message: "Either orderId or transactionId is required"
-      });
-    }
-    
-    // Create a unique key for this verification
-    verificationKey = transactionId || `order_${orderId}`;
-    
-    // Check if this verification is already in progress
-    if (pendingVerifications.has(verificationKey)) {
-      console.log(`🔄 Verification already in progress for ${verificationKey}, skipping`);
-      return res.status(200).json({
-        success: true,
-        message: "Verification already in progress",
-        inProgress: true
-      });
-    }
-    
-    // Add to pending set
-    pendingVerifications.add(verificationKey);
-    
-// In verifyPayment function, update the transaction queries:
-let transaction;
-if (transactionId) {
-  transaction = await Transaction.findOne({
-    where: { transactionId },
-    include: [{
-      model: Order,
-      include: [Customer] // Add this line
-    }]
-  });
-} else if (orderId) {
-  transaction = await Transaction.findOne({
-    where: { orderId },
-    order: [['createdAt', 'DESC']],
-    include: [{
-      model: Order,
-      include: [Customer] // Add this line
-    }]
-  });
-}
-    
-    if (!transaction) {
-      return res.status(404).json({
-        success: false,
-        message: "Transaction not found"
-      });
-    }
-    
-    // If transaction is already SUCCESS, just return current status
-    if (transaction.paymentStatus === "SUCCESS") {
-      console.log('ℹ️ Payment already marked as SUCCESS');
-      
-      res.status(200).json({
-        success: true,
-        data: {
-          transaction: {
-            id: transaction.id,
-            transactionId: transaction.transactionId,
-            merchantTransactionId: transaction.merchantTransactionId,
-            amount: transaction.amount,
-            paymentStatus: transaction.paymentStatus,
-            telegramNotificationSent: transaction.telegramNotificationSent,
-            createdAt: transaction.createdAt,
-            updatedAt: transaction.updatedAt
-          },
-          order: transaction.Order ? {
-            id: transaction.Order.id,
-            totalPrice: transaction.Order.totalPrice,
-            paymentStatus: transaction.Order.paymentStatus,
-            paymentMethod: transaction.Order.paymentMethod
-          } : null
-        }
-      });
-      return;
-    }
-    
-    let shouldSendNotification = false;
-    
-    // If transaction is still pending, check with PhonePe
-    if (transaction.paymentStatus === "PENDING" && transaction.merchantTransactionId) {
-      try {
-        // Check status with PhonePe API
-        const client = getPhonePeClient();
-        const statusResponse = await client.getOrderStatus(transaction.merchantTransactionId);
-        
-        console.log('PhonePe status check:', statusResponse);
-        
-        // Update based on PhonePe response
-        if (statusResponse.state === "COMPLETED") {
-          transaction.paymentStatus = "SUCCESS";
-          
-          if (transaction.Order) {
-            transaction.Order.paymentStatus = "paid";
-            await transaction.Order.save();
-          }
-          
-          shouldSendNotification = true;
-          console.log(`🔄 Payment marked as SUCCESS, will send notification: ${shouldSendNotification}`);
-          
-        } else if (statusResponse.state === "FAILED") {
-          transaction.paymentStatus = "FAILED";
-          if (transaction.Order) {
-            transaction.Order.paymentStatus = "failed";
-            await transaction.Order.save();
-          }
-        }
-        
-        await transaction.save();
-        
-      } catch (statusError) {
-        console.log("PhonePe status check failed:", statusError.message);
-      }
-    }
-    
-    // If payment was successful AND notification hasn't been sent, send it
-    if (shouldSendNotification && transaction.Order) {
-      console.log(`📤 Attempting to send notification for ${transaction.transactionId}`);
-      
-      // Check again right before sending to ensure we don't send duplicates
-      const freshCheck = await Transaction.findByPk(transaction.id);
-      
-      if (freshCheck.telegramNotificationSent) {
-        console.log(`✅ Notification already sent according to fresh check for ${transaction.transactionId}`);
-      } else {
-        await sendSuccessfulPaymentNotification(transaction.Order, transaction);
-      }
-    }
-    
-    // Fetch latest data for response
-    const finalTransaction = await Transaction.findByPk(transaction.id, {
-      include: [Order]
-    });
-    
-    res.status(200).json({
-      success: true,
-      data: {
-        transaction: {
-          id: finalTransaction.id,
-          transactionId: finalTransaction.transactionId,
-          merchantTransactionId: finalTransaction.merchantTransactionId,
-          amount: finalTransaction.amount,
-          paymentStatus: finalTransaction.paymentStatus,
-          telegramNotificationSent: finalTransaction.telegramNotificationSent,
-          createdAt: finalTransaction.createdAt,
-          updatedAt: finalTransaction.updatedAt
-        },
-        order: finalTransaction.Order ? {
-          id: finalTransaction.Order.id,
-          totalPrice: finalTransaction.Order.totalPrice,
-          paymentStatus: finalTransaction.Order.paymentStatus,
-          paymentMethod: finalTransaction.Order.paymentMethod
-        } : null
-      }
-    });
-    
-  } catch (error) {
-    console.error("Verify payment error:", error);
-    res.status(500).json({
-      success: false,
-      message: "Failed to verify payment",
-      error: error.message
-    });
-  } finally {
-    // Always remove from pending set
-    if (verificationKey) {
-      pendingVerifications.delete(verificationKey);
-    }
-  }
-};
-
-// Test Telegram notification
 export const testTelegram = async (req, res) => {
   try {
-    if (!telegramBot || !TELEGRAM_CHAT_ID) {
-      return res.status(200).json({
+    if (!telegramService.isReady) {
+      return res.status(400).json({
         success: false,
-        message: "Telegram not configured",
-        required: {
-          TELEGRAM_BOT_TOKEN: TELEGRAM_BOT_TOKEN ? "Set" : "Missing",
-          YOUR_CHAT_ID: TELEGRAM_CHAT_ID ? "Set" : "Missing"
-        }
+        message: "Telegram bot is not configured. Check your .env file"
       });
     }
     
-    const testMessage = `🔔 Test Notification\n\n` +
-      `This is a test from your payment system!\n` +
-      `Time: ${new Date().toLocaleString()}\n` +
-      `Status: ✅ Working`;
+    const sent = await telegramService.sendTestMessage();
     
-    await telegramBot.sendMessage(TELEGRAM_CHAT_ID, testMessage);
-    
-    res.status(200).json({
-      success: true,
-      message: "Test notification sent to Telegram!",
-      sentTo: TELEGRAM_CHAT_ID
-    });
+    if (sent) {
+      res.status(200).json({
+        success: true,
+        message: "Test notification sent to Telegram!"
+      });
+    } else {
+      res.status(500).json({
+        success: false,
+        message: "Failed to send test notification"
+      });
+    }
     
   } catch (error) {
     console.error("Test Telegram error:", error);
     res.status(500).json({
       success: false,
-      error: error.message,
-      note: "Check your .env file configuration"
+      error: error.message
     });
   }
 };
 
-// Utility function to resend notification if needed (with safety checks)
+// Resend notification
 export const resendNotification = async (req, res) => {
   try {
     const { transactionId } = req.body;
@@ -907,12 +786,10 @@ export const resendNotification = async (req, res) => {
       });
     }
     
-    // Reset notification flag to allow resending
     await transaction.update({
       telegramNotificationSent: false
     });
     
-    // Send notification
     const result = await sendSuccessfulPaymentNotification(transaction.Order, transaction);
     
     if (result) {

@@ -2,10 +2,36 @@ import { DataTypes } from "sequelize";
 import sequelize from "../config/database.js";
 import bcrypt from "bcrypt";
 
+// models/Admin.js - Update your model
 const Admin = sequelize.define("Admin", {
-  email: { type: DataTypes.STRING, unique: true, allowNull: false },
-  password: { type: DataTypes.STRING, allowNull: false },
+  id: {
+    type: DataTypes.INTEGER,
+    primaryKey: true,
+    autoIncrement: true
+  },
+  email: { 
+    type: DataTypes.STRING, 
+    unique: true, 
+    allowNull: false,
+    validate: {
+      isEmail: true
+    }
+  },
+  password: { 
+    type: DataTypes.STRING, 
+    allowNull: false,
+    validate: {
+      len: [6, 100]
+    }
+  }
 }, {
+  timestamps: true,
+  indexes: [
+    {
+      unique: true,
+      fields: ['email']
+    }
+  ],
   hooks: {
     beforeCreate: async (admin) => {
       if (admin.password) {

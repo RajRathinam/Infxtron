@@ -58,7 +58,7 @@ export const adminLogout = async (req, res) => {
   }
 };
 
-// Change admin password
+// controllers/adminController.js - Updated changePassword function
 export const changePassword = async (req, res) => {
   const { oldPassword, newPassword, confirmPassword } = req.body;
 
@@ -93,9 +93,13 @@ export const changePassword = async (req, res) => {
       return res.status(401).json({ message: "Old password is incorrect" });
     }
 
-    // Update password (model hooks will handle hashing)
-    admin.password = newPassword;
-    await admin.save();
+    // Manually hash the new password
+    const hashedPassword = await bcrypt.hash(newPassword, 10);
+    
+    // Update using direct assignment or update method
+    await admin.update({
+      password: hashedPassword
+    });
 
     res.status(200).json({ message: "Password changed successfully" });
   } catch (err) {
