@@ -1,3 +1,4 @@
+// App.jsx
 import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
 import EcommerceLayout from "./pages/ecommerce/Layout";
 import Home from "./pages/ecommerce/Home";
@@ -12,7 +13,7 @@ import Product from "./pages/admin/Products";
 import Customers from "./pages/admin/Customers";
 import Orders from "./pages/admin/Orders";
 import ProtectedRoute from "./components/ProtectedRoute";
-import PolicyLayout from "./pages/ecommerce/PolicyLayout";
+import PublicRoute from "./components/PublicRoute";
 import PrivacyPolicy from "./pages/ecommerce/policies/PrivacyPolicy";
 import TermsPolicy from "./pages/ecommerce/policies/TermsPolicy";
 import ShippingPolicy from "./pages/ecommerce/policies/ShippingPolicy";
@@ -21,6 +22,8 @@ import ReturnPolicy from "./pages/ecommerce/policies/ReturnPolicy";
 import PaymentResult from "./pages/ecommerce/PaymentResult";
 import Transactions from "./pages/admin/Transactions";
 import Offers from "./pages/admin/Offers";
+import DietPlans from "./pages/admin/DietPlans";
+
 function App() {
   return (
     <Router>
@@ -41,10 +44,14 @@ function App() {
           <Route path="return" element={<ReturnPolicy />} />
         </Route>
 
-        {/* Login */}
-        <Route path="/login" element={<Login />} />
+        {/* Login - Protected with PublicRoute */}
+        <Route path="/login" element={
+          <PublicRoute>
+            <Login />
+          </PublicRoute>
+        } />
 
-        {/* Admin */}
+        {/* Admin - Protected with ProtectedRoute */}
         <Route
           path="/admin"
           element={
@@ -57,8 +64,9 @@ function App() {
           <Route path="products" element={<Product />} />
           <Route path="customers" element={<Customers />} />
           <Route path="orders" element={<Orders />} />
-          <Route path="transactions" element={<Transactions/>}/>
-          <Route path="offers" element={<Offers/>}/>
+          <Route path="transactions" element={<Transactions />} />
+          <Route path="offers" element={<Offers />} />
+          <Route path="diet-plans" element={<DietPlans />} />
         </Route>
       </Routes>
     </Router>

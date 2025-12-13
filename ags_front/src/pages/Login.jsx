@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import axiosInstance from "../utils/axiosConfig";
 import { login as setToken } from "../utils/auth";
-import { Lock, Mail, Eye, EyeOff } from "lucide-react";
+import { Lock, Mail, Eye, EyeOff, ExternalLink } from "lucide-react";
 import Swal from "sweetalert2";
 
 export default function Login() {
@@ -54,6 +54,10 @@ export default function Login() {
     }
   };
 
+  const handleGoToEcommerce = () => {
+    navigate("/");
+  };
+
   return (
     <div className="min-h-screen flex flex-col md:flex-row">
       {/* Left Decorative Section */}
@@ -66,14 +70,14 @@ export default function Login() {
         <div className="z-10 text-center px-10">
           <img
             src="/AGHealthyFood.png"
-            alt="AG’s Healthy Food Logo"
+            alt="AG's Healthy Food Logo"
             className="w-48 mx-auto mb-6 drop-shadow-md"
           />
           <h1 className="text-3xl font-semibold text-gray-700 leading-snug">
             Welcome Back, Admin 🌱
           </h1>
           <p className="text-gray-500 mt-2 text-sm">
-            Manage your products, track orders, and keep AG’s Healthy Food
+            Manage your products, track orders, and keep AG's Healthy Food
             running smooth and fresh.
           </p>
         </div>
@@ -160,10 +164,22 @@ export default function Login() {
             {loading ? "Logging in..." : "Login"}
           </button>
 
-          {/* Small Footer Note */}
-          <p className="text-xs text-gray-500 text-center mt-4">
-            © {new Date().getFullYear()} AG’s Healthy Food | Admin Portal
-          </p>
+          {/* Footer with Ecommerce Link */}
+          <div className="mt-4 pt-4 border-t border-gray-100">
+            <button
+              type="button"
+              className="w-full flex items-center justify-center gap-2 text-gray-600 transition-colors group"
+            >
+              <span className="text-xs">
+                © {new Date().getFullYear()} AG's Healthy Food
+              </span>
+              <div 
+              onClick={handleGoToEcommerce} className="flex items-center gap-1 text-xs font-medium text-[#6dce00] hover:text-[#4c8b04]">
+                <span>Ecommerce</span>
+                <ExternalLink size={12} className="group-hover:translate-x-0.5 transition-transform" />
+              </div>
+            </button>
+          </div>
         </form>
       </div>
     </div>

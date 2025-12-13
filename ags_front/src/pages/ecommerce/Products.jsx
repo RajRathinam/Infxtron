@@ -18,6 +18,7 @@ import {
   Info,
   Lightbulb
 } from "lucide-react";
+import DietPlanForm from '../../components/DietPlanForm';
 
 const Products = () => {
   const [quantities, setQuantities] = useState({});
@@ -392,57 +393,34 @@ const Products = () => {
   };
 
   const weekDates = getNextWeekDates();
+  // Add these handlers
+    const [showDietPlanForm, setShowDietPlanForm] = useState(false);
+  
+  const handleOpenDietPlanForm = () => {
+    setShowDietPlanForm(true);
+  };
+
+  const handleCloseDietPlanForm = () => {
+    setShowDietPlanForm(false);
+  };
+
+  const handleDietPlanSubmitSuccess = () => {
+    // Optional: Add any success actions
+    console.log('Diet plan submitted successfully!');
+  };
 
   return (
     <section
       id="products"
       className="min-h-screen px-4 sm:px-6 md:px-16 py-12 text-gray-800 overflow-hidden relative"
     >
-      {/* Google Form Modal */}
-      {showGoogleForm && (
-        <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50 p-4">
-          <motion.div
-            initial={{ opacity: 0, scale: 0.9 }}
-            animate={{ opacity: 1, scale: 1 }}
-            exit={{ opacity: 0, scale: 0.9 }}
-            className="bg-white rounded-lg shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-hidden"
-          >
-            <div className="flex justify-between items-center p-4 border-b border-gray-200">
-              <h3 className="text-lg font-bold text-gray-800">
-                Customized Diet Plan Form
-              </h3>
-              <button
-                onClick={handleCloseGoogleForm}
-                className="p-1 hover:bg-gray-100 rounded-full transition-colors"
-              >
-                <X size={20} />
-              </button>
-            </div>
-            <div className="overflow-auto max-h-[calc(90vh-80px)]">
-              {GOOGLE_FORM_URL ? (
-                <iframe 
-                  src={GOOGLE_FORM_URL} 
-                  width="100%" 
-                  height="1122" 
-                  frameBorder="0"
-                  marginHeight="0" 
-                  marginWidth="0"
-                  className="w-full"
-                >
-                  Loading…
-                </iframe>
-              ) : (
-                <div className="text-center py-8">
-                  <p className="text-red-500 text-sm">Google Form URL not configured.</p>
-                  <p className="text-xs text-gray-600 mt-2">
-                    Please check your environment variables.
-                  </p>
-                </div>
-              )}
-            </div>
-          </motion.div>
-        </div>
+            {showDietPlanForm && (
+        <DietPlanForm
+          onClose={handleCloseDietPlanForm}
+          onSubmitSuccess={handleDietPlanSubmitSuccess}
+        />
       )}
+
 
       {/* Date Picker Section */}
       <div 
@@ -459,8 +437,8 @@ const Products = () => {
               </div>
               <p className="text-xs text-gray-500">
                 {checkCutoffTime() 
-                  ? "Orders after 2 PM will be delivered from tomorrow"
-                  : "Orders before 2 PM can be delivered today"}
+                  ? "Orders after 2 PM will be delivered from tomorrow."
+                  : "Place your order by 2 PM for same-day delivery."}
               </p>
             </div>
             
@@ -850,52 +828,89 @@ const Products = () => {
 
       {/* Rest of your sections remain the same */}
       {/* Customized Diet Plan Section */}
-      <div className="mt-12 bg-gradient-to-br from-emerald-50 to-teal-50 rounded-xl p-6 border border-emerald-100 shadow-lg">
-        <div className="text-center mb-4">
-          <h3 className="text-xl sm:text-2xl font-black text-gray-900 mb-2">
-            Customized Diet Plan
-          </h3>
-          <p className="text-xs sm:text-sm text-gray-600 max-w-2xl mx-auto">
-            Need a personalized meal plan? Get a customized diet plan tailored to your health goals.
-          </p>
-        </div>
-        <div className="flex flex-col sm:flex-row gap-3 justify-center items-center">
-          <button 
-            onClick={handleOpenGoogleForm}
-            className="bg-gradient-to-r from-emerald-600 to-teal-600 text-white px-6 py-3 rounded-xl font-bold text-sm shadow-lg hover:shadow-xl transform hover:scale-105 transition-all duration-300 flex items-center gap-2"
-          >
-            <span>Get Customized Diet Plan</span>
-            <ArrowRight size={16} />
-          </button>
-          <p className="text-xs text-gray-600">
-            Contact us for personalized consultation
-          </p>
-        </div>
+<div className="relative mt-12 bg-gradient-to-br from-emerald-50 to-teal-50 rounded-xl p-6 border border-emerald-100 shadow-lg overflow-hidden">
+  {/* Decorative background elements */}
+  <div className="absolute -top-6 -right-6 w-24 h-24 bg-emerald-200 rounded-full opacity-20 blur-xl"></div>
+  <div className="absolute -bottom-8 -left-8 w-32 h-32 bg-teal-200 rounded-full opacity-15 blur-xl"></div>
+  
+  {/* Floating decorative dots */}
+  <div className="absolute top-4 left-4 w-3 h-3 bg-emerald-300 rounded-full opacity-40"></div>
+  <div className="absolute bottom-4 right-4 w-4 h-4 bg-teal-300 rounded-full opacity-30"></div>
+  
+  <div className="relative z-10">
+    <div className="text-center mb-4">
+      <div className="inline-flex items-center justify-center w-12 h-12 bg-gradient-to-br from-emerald-100 to-teal-100 rounded-full mb-3">
+        <div className="w-6 h-6 bg-gradient-to-r from-emerald-600 to-teal-600 rounded-full"></div>
       </div>
+      <h3 className="text-xl sm:text-2xl font-black text-gray-900 mb-2">
+        Customized Diet Plan
+      </h3>
+      <p className="text-xs sm:text-sm text-gray-600 max-w-2xl mx-auto">
+        Need a meal plan designed just for you? Unlock a customized diet tailored to your unique health goals.
+         <span className="block mt-2 font-medium text-gray-600">
+          Ready for your custom diet? Get a personalized plan today.
+        </span>
+        <span className="block mt-2 font-medium text-emerald-700">
+          Achieve your wellness targets with a bespoke diet plan crafted specifically for you.
+        </span>
+      </p>
+    </div>
+    <div className="flex flex-col sm:flex-row gap-3 justify-center items-center">
+      <button 
+        onClick={handleOpenDietPlanForm}
+        className="relative overflow-hidden bg-gradient-to-r from-emerald-600 to-teal-600 text-white px-6 py-3 rounded-xl font-bold text-sm shadow-lg hover:shadow-xl transform hover:scale-105 transition-all duration-300 flex items-center gap-2 group"
+      >
+        {/* Button shine effect */}
+        <div className="absolute inset-0 w-full h-full bg-gradient-to-r from-transparent via-white/20 to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-1000"></div>
+        <span>Get Customized Diet Plan</span>
+        <ArrowRight size={16} className="group-hover:translate-x-1 transition-transform" />
+      </button>
+      <p className="text-xs text-gray-600">
+        Contact us for personalized consultation
+      </p>
+    </div>
+  </div>
+</div>
 
-      {/* Product Catalog PDF Section */}
-      <div className="mt-12 bg-gradient-to-br from-amber-50 to-orange-50 rounded-xl p-6 border border-amber-100 shadow-lg">
-        <div className="text-center mb-4">
-          <h3 className="text-xl sm:text-2xl font-black text-gray-900 mb-2">
-            Complete Product Catalog
-          </h3>
-          <p className="text-xs sm:text-sm text-gray-600 max-w-2xl mx-auto">
-            Explore our entire product range with all available products and subscription plans.
-          </p>
-        </div>
-        <div className="flex flex-col sm:flex-row gap-3 justify-center items-center">
-          <button 
-            onClick={() => setIsCatalogOpen(true)}
-            className="bg-gradient-to-r from-amber-500 to-orange-500 text-white px-6 py-3 rounded-xl font-bold text-sm shadow-lg hover:shadow-xl transform hover:scale-105 transition-all duration-300 flex items-center gap-2"
-          >
-            <FileText size={16} />
-            <span>View Product Catalog</span>
-          </button>
-          <p className="text-xs text-gray-600">
-            Explore our complete product offerings
-          </p>
-        </div>
+{/* Product Catalog PDF Section */}
+<div className="relative mt-12 bg-gradient-to-br from-amber-50 to-orange-50 rounded-xl p-6 border border-amber-100 shadow-lg overflow-hidden">
+  {/* Decorative background elements */}
+  <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-amber-400 to-orange-400"></div>
+  <div className="absolute -top-10 left-1/4 w-20 h-20 bg-amber-200 rounded-full opacity-20 blur-xl"></div>
+  <div className="absolute bottom-0 right-0 w-40 h-40 bg-orange-100 rounded-full opacity-10 blur-xl"></div>
+  
+  {/* Floating geometric shapes */}
+  <div className="absolute top-6 right-6 w-8 h-8 border-2 border-amber-300 rounded-lg opacity-30"></div>
+  <div className="absolute bottom-6 left-6 w-6 h-6 border-2 border-orange-300 rounded-full opacity-40"></div>
+  
+  <div className="relative z-10">
+    <div className="text-center mb-4">
+      <div className="inline-flex items-center justify-center w-12 h-12 bg-gradient-to-br from-amber-100 to-orange-100 rounded-full mb-3 shadow-inner">
+        <div className="w-6 h-6 bg-gradient-to-r from-amber-500 to-orange-500 rounded-lg rotate-45"></div>
       </div>
+      <h3 className="text-xl sm:text-2xl font-black text-gray-900 mb-2">
+        Complete Product Catalog
+      </h3>
+      <p className="text-xs sm:text-sm text-gray-600 max-w-2xl mx-auto">
+        Explore our entire product range with all available products and subscription plans.
+      </p>
+    </div>
+    <div className="flex flex-col sm:flex-row gap-3 justify-center items-center">
+      <button 
+        onClick={() => setIsCatalogOpen(true)}
+        className="relative overflow-hidden bg-gradient-to-r from-amber-500 to-orange-500 text-white px-6 py-3 rounded-xl font-bold text-sm shadow-lg hover:shadow-xl transform hover:scale-105 transition-all duration-300 flex items-center gap-2 group"
+      >
+        {/* Button shine effect */}
+        <div className="absolute inset-0 w-full h-full bg-gradient-to-r from-transparent via-white/20 to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-1000"></div>
+        <FileText size={16} className="group-hover:rotate-12 transition-transform" />
+        <span>View Product Catalog</span>
+      </button>
+      <p className="text-xs text-gray-600">
+        Explore our complete product offerings
+      </p>
+    </div>
+  </div>
+</div>
 
       {/* Catalog Popup Modal */}
       {isCatalogOpen && (

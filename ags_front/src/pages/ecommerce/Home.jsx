@@ -198,8 +198,8 @@ export default function Home() {
               transition={{ duration: 0.6, delay: 0.4 }}
               className="text-xs sm:text-lg md:text-xl text-gray-600 max-w-2xl mx-auto leading-relaxed"
             >
-              Discover our range of organic, fresh, and nutritious meals delivered daily to your doorstep.
-            </motion.p>
+         Enjoy a variety of organic and healthy meals made fresh every day.
+         </motion.p>
       
           </div>
 

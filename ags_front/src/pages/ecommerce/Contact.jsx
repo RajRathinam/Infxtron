@@ -131,7 +131,7 @@ const Contact = () => {
       icon: Clock, 
       title: "Business Hours", 
       content: "Mon - Sat", 
-      subtitle: "7:00 AM - 8:00 PM",
+      subtitle: "3:00 PM - 6:00 PM",
       link: "#", 
       color: "from-amber-500 to-orange-500",
       accentColor: "bg-amber-500"

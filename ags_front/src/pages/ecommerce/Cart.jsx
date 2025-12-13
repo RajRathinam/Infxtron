@@ -777,7 +777,7 @@ export default function Cart() {
                 Complete Payment
               </h2>
               <p className="text-sm md:text-base text-gray-600">
-                Total: <span className="font-bold text-green-600">₹${total.toFixed(2)}</span>
+                Total: <span className="font-bold text-green-600">₹{total.toFixed(2)}</span>
               </p>
             </div>
 

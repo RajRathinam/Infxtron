@@ -44,13 +44,9 @@ const About = () => {
 
   const values = [
     "Farm-to-table freshness guaranteed",
-    "Eco-friendly and sustainable practices",
     "Daily delivery of fresh products",
     "100% satisfaction guarantee",
-    "Supporting local farming communities",
-    "Chemical-free & pesticide-free",
-    "Seasonal produce only",
-    "Zero plastic packaging"
+    "Chemical-free & pesticide-free"
   ];
 
   const stats = [
@@ -227,7 +223,7 @@ const About = () => {
                 transition={{ duration: 0.5, delay: 0.1 }}
                 className="text-xl sm:text-2xl md:text-3xl font-bold text-gray-900"
               >
-                From Our{" "}
+                From {" "}
                 <span className="text-emerald-600">Soil</span>{" "}
                 to Your{" "}
                 <span className="text-amber-600">Table</span>

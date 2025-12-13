@@ -1,6 +1,7 @@
-import { useState } from "react";
+// pages/admin/Layout.jsx
+import { useState, useEffect } from "react";
 import { Outlet, NavLink, useNavigate } from "react-router-dom";
-import { logout } from "../../utils/auth";
+import { logout, isAuthenticated, clearAuthAndRedirect } from "../../utils/auth";
 import { Menu, X, LogOut, KeyRound, User } from "lucide-react";
 import Swal from "sweetalert2";
 
@@ -18,15 +19,71 @@ export default function AdminLayout() {
   });
   const [loading, setLoading] = useState(false);
 
+  // 🔒 Main authentication and back button prevention
+  useEffect(() => {
+    // Check authentication on mount
+    if (!isAuthenticated()) {
+      navigate("/login", { replace: true });
+      return;
+    }
+
+    // Handle browser back/forward buttons
+    const handlePopState = (event) => {
+      if (!isAuthenticated()) {
+        navigate("/login", { replace: true });
+        // Prevent going back to admin pages
+        window.history.pushState(null, "", "/login");
+      }
+    };
+
+    // Add event listener for browser navigation
+    window.addEventListener("popstate", handlePopState);
+
+    // Clear browser history to prevent going back to login when authenticated
+    window.history.pushState(null, "", window.location.pathname);
+
+    // Check authentication when window gains focus (user switches tabs back)
+    const handleVisibilityChange = () => {
+      if (!document.hidden && !isAuthenticated()) {
+        navigate("/login", { replace: true });
+      }
+    };
+
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    window.addEventListener("focus", handleVisibilityChange);
+
+    // Cleanup
+    return () => {
+      window.removeEventListener("popstate", handlePopState);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+      window.removeEventListener("focus", handleVisibilityChange);
+    };
+  }, [navigate]);
+
   const handleLogout = async () => {
-    try {
-      await fetch(`${BASE_URL}/api/admin/logout`, {
-        method: "POST",
-        credentials: "include",
-      });
-    } catch {}
-    logout();
-    navigate("/login");
+    const result = await Swal.fire({
+      title: "Logout?",
+      text: "Are you sure you want to logout?",
+      icon: "question",
+      showCancelButton: true,
+      confirmButtonColor: "#6dce00",
+      cancelButtonColor: "#d33",
+      confirmButtonText: "Yes, logout",
+    });
+
+    if (result.isConfirmed) {
+      try {
+        await fetch(`${BASE_URL}/api/admin/logout`, {
+          method: "POST",
+          credentials: "include",
+        });
+      } catch (error) {
+        console.error("Logout error:", error);
+      }
+      
+      // Clear all auth data and redirect
+      clearAuthAndRedirect(navigate);
+    }
   };
 
   const handleInputChange = (e) => {
@@ -71,7 +128,7 @@ export default function AdminLayout() {
       });
 
       const data = await res.json();
-      
+
       if (res.ok) {
         await Swal.fire({
           icon: "success",
@@ -82,7 +139,7 @@ export default function AdminLayout() {
           timer: 2000,
           showConfirmButton: true,
         });
-        
+
         setForm({ oldPassword: "", newPassword: "", confirmPassword: "" });
         setShowPasswordModal(false);
       } else {
@@ -166,7 +223,7 @@ export default function AdminLayout() {
           >
             Orders
           </NavLink>
-<NavLink
+          <NavLink
             to="/admin/transactions"
             className={({ isActive }) =>
               isActive ? activeClass : inactiveClass
@@ -175,12 +232,12 @@ export default function AdminLayout() {
             Transactions
           </NavLink>
           <NavLink
-            to="/admin/offers"
+            to="/admin/diet-plans"
             className={({ isActive }) =>
               isActive ? activeClass : inactiveClass
             }
           >
-            Offers
+            Diet Plans
           </NavLink>
           {/* User Dropdown */}
           <div className="relative">
@@ -228,17 +285,15 @@ export default function AdminLayout() {
 
       {/* Mobile Menu Overlay */}
       <div
-        className={`fixed inset-0 bg-black/40 z-40 md:hidden transition-opacity duration-300 ${
-          menuOpen ? "opacity-100 visible" : "opacity-0 invisible"
-        }`}
+        className={`fixed inset-0 bg-black/40 z-40 md:hidden transition-opacity duration-300 ${menuOpen ? "opacity-100 visible" : "opacity-0 invisible"
+          }`}
         onClick={() => setMenuOpen(false)}
       ></div>
 
       {/* Sidebar for Mobile */}
       <aside
-        className={`fixed top-0 left-0 h-full w-64 bg-white shadow-lg border-r border-gray-200 z-50 transform transition-transform duration-300 flex flex-col ${
-          menuOpen ? "translate-x-0" : "-translate-x-full"
-        }`}
+        className={`fixed top-0 left-0 h-full w-64 bg-white shadow-lg border-r border-gray-200 z-50 transform transition-transform duration-300 flex flex-col ${menuOpen ? "translate-x-0" : "-translate-x-full"
+          }`}
       >
         <div className="flex justify-between items-center px-6 py-6 border-b border-gray-100">
           <h2 className="text-lg font-semibold text-gray-700">Menu</h2>
@@ -256,10 +311,9 @@ export default function AdminLayout() {
             end
             onClick={() => setMenuOpen(false)}
             className={({ isActive }) =>
-              `block rounded-md px-4 py-2 ${
-                isActive
-                  ? "bg-green-200/60 text-[#6dce00] font-medium"
-                  : "hover:bg-green-100 hover:text-[#6dce00]"
+              `block rounded-md px-4 py-2 ${isActive
+                ? "bg-green-200/60 text-[#6dce00] font-medium"
+                : "hover:bg-green-100 hover:text-[#6dce00]"
               }`
             }
           >
@@ -269,10 +323,9 @@ export default function AdminLayout() {
             to="/admin/products"
             onClick={() => setMenuOpen(false)}
             className={({ isActive }) =>
-              `block rounded-md px-4 py-2 ${
-                isActive
-                  ? "bg-green-200/60 text-[#6dce00] font-medium"
-                  : "hover:bg-green-100 hover:text-[#6dce00]"
+              `block rounded-md px-4 py-2 ${isActive
+                ? "bg-green-200/60 text-[#6dce00] font-medium"
+                : "hover:bg-green-100 hover:text-[#6dce00]"
               }`
             }
           >
@@ -282,10 +335,9 @@ export default function AdminLayout() {
             to="/admin/customers"
             onClick={() => setMenuOpen(false)}
             className={({ isActive }) =>
-              `block rounded-md px-4 py-2 ${
-                isActive
-                  ? "bg-green-200/60 text-[#6dce00] font-medium"
-                  : "hover:bg-green-100 hover:text-[#6dce00]"
+              `block rounded-md px-4 py-2 ${isActive
+                ? "bg-green-200/60 text-[#6dce00] font-medium"
+                : "hover:bg-green-100 hover:text-[#6dce00]"
               }`
             }
           >
@@ -295,10 +347,9 @@ export default function AdminLayout() {
             to="/admin/orders"
             onClick={() => setMenuOpen(false)}
             className={({ isActive }) =>
-              `block rounded-md px-4 py-2 ${
-                isActive
-                  ? "bg-green-200/60 text-[#6dce00] font-medium"
-                  : "hover:bg-green-100 hover:text-[#6dce00]"
+              `block rounded-md px-4 py-2 ${isActive
+                ? "bg-green-200/60 text-[#6dce00] font-medium"
+                : "hover:bg-green-100 hover:text-[#6dce00]"
               }`
             }
           >
@@ -308,27 +359,25 @@ export default function AdminLayout() {
             to="/admin/transactions"
             onClick={() => setMenuOpen(false)}
             className={({ isActive }) =>
-              `block rounded-md px-4 py-2 ${
-                isActive
-                  ? "bg-green-200/60 text-[#6dce00] font-medium"
-                  : "hover:bg-green-100 hover:text-[#6dce00]"
+              `block rounded-md px-4 py-2 ${isActive
+                ? "bg-green-200/60 text-[#6dce00] font-medium"
+                : "hover:bg-green-100 hover:text-[#6dce00]"
               }`
             }
           >
             Transactions
           </NavLink>
           <NavLink
-            to="/admin/offers"
+            to="/admin/diet-plans"
             onClick={() => setMenuOpen(false)}
             className={({ isActive }) =>
-              `block rounded-md px-4 py-2 ${
-                isActive
-                  ? "bg-green-200/60 text-[#6dce00] font-medium"
-                  : "hover:bg-green-100 hover:text-[#6dce00]"
+              `block rounded-md px-4 py-2 ${isActive
+                ? "bg-green-200/60 text-[#6dce00] font-medium"
+                : "hover:bg-green-100 hover:text-[#6dce00]"
               }`
             }
           >
-            Offers
+           Diet Plans
           </NavLink>
         </nav>
 
@@ -365,7 +414,7 @@ export default function AdminLayout() {
             >
               <X size={20} />
             </button>
-            
+
             <div className="text-center mb-2">
               <KeyRound className="mx-auto text-yellow-500 mb-3" size={32} />
               <h2 className="text-xl font-bold text-gray-800">Change Password</h2>
@@ -426,11 +475,10 @@ export default function AdminLayout() {
               <button
                 type="submit"
                 disabled={loading}
-                className={`w-full py-3 rounded-lg font-semibold text-white transition-all ${
-                  loading
+                className={`w-full py-3 rounded-lg font-semibold text-white transition-all ${loading
                     ? "bg-gray-400 cursor-not-allowed"
                     : "bg-gradient-to-r from-[#6dce00] to-green-600 hover:from-[#60b800] hover:to-green-700 shadow-md hover:shadow-lg"
-                }`}
+                  }`}
               >
                 {loading ? (
                   <div className="flex items-center justify-center gap-2">
