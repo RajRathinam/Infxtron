@@ -7,14 +7,15 @@ import {
   deleteOrder,
   updatePaymentStatus,getOrderById
 } from "../controllers/orderController.js";
+import {isAdmin} from "../middleware/isAdmin.js";
 
 const router = express.Router();
 
 router.post("/", placeOrder);
-router.get("/", getOrders);
-router.patch("/:id/status", updateOrderStatus);
-router.patch("/:id/payment-status", updatePaymentStatus);
-router.delete("/:id", deleteOrder);
+router.get("/",isAdmin, getOrders);
+router.patch("/:id/status",isAdmin, updateOrderStatus);
+router.patch("/:id/payment-status",isAdmin, updatePaymentStatus);
+router.delete("/:id",isAdmin, deleteOrder);
 // routes/orderRoutes.js
 router.get("/:id", getOrderById); // Add this line
 export default router;

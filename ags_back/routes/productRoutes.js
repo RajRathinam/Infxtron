@@ -7,11 +7,11 @@ import {
   deleteProduct,
 } from "../controllers/productController.js";
 import upload from "../config/multerConfig.js";
-
+import { isAdmin } from "../middleware/isAdmin.js";
 const router = express.Router();
 
 // Create product with image upload
-router.post("/", upload.single("image"), createProduct);
+router.post("/",isAdmin, upload.single("image"), createProduct);
 
 // Get all products
 router.get("/", getAllProducts);
@@ -20,9 +20,9 @@ router.get("/", getAllProducts);
 router.get("/:id", getProductById);
 
 // Update product
-router.put("/:id", upload.single("image"), updateProduct);
+router.put("/:id",isAdmin, upload.single("image"), updateProduct);
 
 // Delete product
-router.delete("/:id", deleteProduct);
+router.delete("/:id",isAdmin, deleteProduct);
 
 export default router;
