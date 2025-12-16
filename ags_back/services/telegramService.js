@@ -196,8 +196,9 @@ ${data.additionalNotes || 'None'}
         const quantity = product.quantity || 1;
         const price = product.price || 0;
         const total = quantity * price;
+        const orderType = product.orderType || "xxx";
         
-        productsList += `${index + 1}. ${productName} × ${quantity} = ₹${total}\n`;
+        productsList += `${index + 1}. ${productName}. (${orderType}) × ${quantity} = ₹${total}\n`;
       });
     } else {
       productsList = 'No products listed\n';

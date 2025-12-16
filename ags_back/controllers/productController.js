@@ -2,7 +2,7 @@ import Product from "../models/Product.js";
 import cloudinary from "../config/cloudinary.js";
 import stream from "stream";
 
-// Helper function to safely parse JSON (MySQL compatibility)
+// Helper functions (keep existing ones)
 const safeParseJSON = (value) => {
   if (!value) return null;
   try {
@@ -12,7 +12,6 @@ const safeParseJSON = (value) => {
   }
 };
 
-// Helper function to stringify arrays/objects for MySQL TEXT fields
 const safeStringify = (value) => {
   if (!value) return null;
   try {
@@ -22,22 +21,15 @@ const safeStringify = (value) => {
   }
 };
 
-// Helper function to extract public_id from Cloudinary URL
 const getPublicIdFromUrl = (url) => {
   if (!url) return null;
   try {
     const urlParts = url.split('/');
     const uploadIndex = urlParts.indexOf('upload');
     if (uploadIndex === -1) return null;
-    
-    // Get the part after upload/ and remove file extension
     const pathWithVersion = urlParts.slice(uploadIndex + 1).join('/');
     const publicId = pathWithVersion.split('.')[0];
-    
-    // Remove version number if present (v1234567890/)
-    const finalPublicId = publicId.replace(/^v\d+\//, '');
-    
-    return finalPublicId;
+    return publicId.replace(/^v\d+\//, '');
   } catch (error) {
     console.error('Error extracting public_id from URL:', error);
     return null;
@@ -48,23 +40,39 @@ export const createProduct = async (req, res) => {
   try {
     const {
       productName,
-      packName,
-      weight,
-      proteinIntake,
+      category,
+      
+      // Normal Pack
+      normalWeight,
+      normalProteinIntake,
+      normalSingleOrder,
+      normalWeeklySubscription,
+      normalMonthlySubscription,
+      
+      // Meal Pack
+      mealWeight,
+      mealProteinIntake,
+      mealSingleOrder,
+      mealWeeklySubscription,
+      mealMonthlySubscription,
+      
+      // Family Pack
+      familyWeight,
+      familyProteinIntake,
+      familySingleOrder,
+      familyWeeklySubscription,
+      familyMonthlySubscription,
+      
       availableDay,
       availableTime,
-      singleOrder,
-      weeklySubscription,
-      monthlySubscription,
       ingredients,
-      discounts,
       description,
     } = req.body;
 
-    // Input validation
-    if (!productName || !packName || !weight || !singleOrder) {
+    // Input validation for Normal Pack (required)
+    if (!productName || !category || !normalWeight || !normalSingleOrder) {
       return res.status(400).json({ 
-        message: "Product name, pack name, weight, and single order price are required" 
+        message: "Product name, category, normal weight, and normal single order price are required" 
       });
     }
 
@@ -84,17 +92,33 @@ export const createProduct = async (req, res) => {
 
     const product = await Product.create({
       productName: productName.trim(),
-      packName: packName.trim(),
-      weight: weight.trim(),
-      proteinIntake: proteinIntake ? proteinIntake.trim() : null,
-      availableDay: safeStringify(safeParseJSON(availableDay)), // Stringify for MySQL TEXT
+      category: category,
+      
+      // Normal Pack
+      normalWeight: normalWeight.trim(),
+      normalProteinIntake: normalProteinIntake ? normalProteinIntake.trim() : null,
+      normalSingleOrder: parseInt(normalSingleOrder) || 0,
+      normalWeeklySubscription: parseInt(normalWeeklySubscription) || 0,
+      normalMonthlySubscription: parseInt(normalMonthlySubscription) || 0,
+      
+      // Meal Pack (optional)
+      mealWeight: mealWeight ? mealWeight.trim() : null,
+      mealProteinIntake: mealProteinIntake ? mealProteinIntake.trim() : null,
+      mealSingleOrder: mealSingleOrder ? parseInt(mealSingleOrder) : null,
+      mealWeeklySubscription: mealWeeklySubscription ? parseInt(mealWeeklySubscription) : null,
+      mealMonthlySubscription: mealMonthlySubscription ? parseInt(mealMonthlySubscription) : null,
+      
+      // Family Pack (optional)
+      familyWeight: familyWeight ? familyWeight.trim() : null,
+      familyProteinIntake: familyProteinIntake ? familyProteinIntake.trim() : null,
+      familySingleOrder: familySingleOrder ? parseInt(familySingleOrder) : null,
+      familyWeeklySubscription: familyWeeklySubscription ? parseInt(familyWeeklySubscription) : null,
+      familyMonthlySubscription: familyMonthlySubscription ? parseInt(familyMonthlySubscription) : null,
+      
+      availableDay: safeStringify(safeParseJSON(availableDay)),
       availableTime: availableTime ? availableTime.trim() : null,
-      singleOrder: parseInt(singleOrder) || 0,
-      weeklySubscription: parseInt(weeklySubscription) || 0,
-      monthlySubscription: parseInt(monthlySubscription) || 0,
       imagePath,
-      ingredients: safeStringify(safeParseJSON(ingredients)), // Stringify for MySQL TEXT
-      discounts: safeParseJSON(discounts), // JSON field doesn't need stringification
+      ingredients: safeStringify(safeParseJSON(ingredients)),
       description: description ? description.trim() : null,
     });
 
@@ -105,7 +129,6 @@ export const createProduct = async (req, res) => {
   } catch (error) {
     console.error("Create product error:", error);
     
-    // Handle Sequelize validation errors
     if (error.name === 'SequelizeValidationError') {
       const validationErrors = error.errors.map(err => err.message);
       return res.status(400).json({
@@ -114,7 +137,6 @@ export const createProduct = async (req, res) => {
       });
     }
     
-    // Handle unique constraint errors
     if (error.name === 'SequelizeUniqueConstraintError') {
       return res.status(409).json({
         message: "Product with similar details already exists"
@@ -131,10 +153,9 @@ export const createProduct = async (req, res) => {
 export const getAllProducts = async (req, res) => {
   try {
     const products = await Product.findAll({
-      order: [['createdAt', 'DESC']] // Newest first
+      order: [['createdAt', 'DESC']]
     });
     
-    // Parse JSON fields for response (MySQL stores as strings)
     const formattedProducts = products.map(product => ({
       ...product.toJSON(),
       availableDay: safeParseJSON(product.availableDay) || [],
@@ -168,7 +189,6 @@ export const getProductById = async (req, res) => {
       });
     }
 
-    // Parse JSON fields for response
     const formattedProduct = {
       ...product.toJSON(),
       availableDay: safeParseJSON(product.availableDay) || [],
@@ -204,30 +224,44 @@ export const updateProduct = async (req, res) => {
 
     const {
       productName,
-      packName,
-      weight,
-      proteinIntake,
+      category,
+      
+      // Normal Pack
+      normalWeight,
+      normalProteinIntake,
+      normalSingleOrder,
+      normalWeeklySubscription,
+      normalMonthlySubscription,
+      
+      // Meal Pack
+      mealWeight,
+      mealProteinIntake,
+      mealSingleOrder,
+      mealWeeklySubscription,
+      mealMonthlySubscription,
+      
+      // Family Pack
+      familyWeight,
+      familyProteinIntake,
+      familySingleOrder,
+      familyWeeklySubscription,
+      familyMonthlySubscription,
+      
       availableDay,
       availableTime,
-      singleOrder,
-      weeklySubscription,
-      monthlySubscription,
       ingredients,
-      discounts,
       description,
     } = req.body;
 
-    // Delete old image from Cloudinary if new image is uploaded
+    // Delete old image if new image uploaded
     if (req.file && req.file.buffer) {
-      // Delete old image if exists
       if (product.imagePath) {
         const oldPublicId = getPublicIdFromUrl(product.imagePath);
         if (oldPublicId) {
           try {
             await cloudinary.uploader.destroy(oldPublicId);
           } catch (cloudinaryError) {
-            console.error('Error deleting old image from Cloudinary:', cloudinaryError);
-            // Continue with upload even if deletion fails
+            console.error('Error deleting old image:', cloudinaryError);
           }
         }
       }
@@ -245,25 +279,40 @@ export const updateProduct = async (req, res) => {
       product.imagePath = uploadResult.secure_url;
     }
 
-    // Update product fields with proper data types for MySQL
+    // Update product fields
     const updateData = {};
     
     if (productName !== undefined) updateData.productName = productName.trim();
-    if (packName !== undefined) updateData.packName = packName.trim();
-    if (weight !== undefined) updateData.weight = weight.trim();
-    if (proteinIntake !== undefined) updateData.proteinIntake = proteinIntake ? proteinIntake.trim() : null;
+    if (category !== undefined) updateData.category = category;
+    
+    // Normal Pack
+    if (normalWeight !== undefined) updateData.normalWeight = normalWeight.trim();
+    if (normalProteinIntake !== undefined) updateData.normalProteinIntake = normalProteinIntake ? normalProteinIntake.trim() : null;
+    if (normalSingleOrder !== undefined) updateData.normalSingleOrder = parseInt(normalSingleOrder) || 0;
+    if (normalWeeklySubscription !== undefined) updateData.normalWeeklySubscription = parseInt(normalWeeklySubscription) || 0;
+    if (normalMonthlySubscription !== undefined) updateData.normalMonthlySubscription = parseInt(normalMonthlySubscription) || 0;
+    
+    // Meal Pack
+    if (mealWeight !== undefined) updateData.mealWeight = mealWeight ? mealWeight.trim() : null;
+    if (mealProteinIntake !== undefined) updateData.mealProteinIntake = mealProteinIntake ? mealProteinIntake.trim() : null;
+    if (mealSingleOrder !== undefined) updateData.mealSingleOrder = mealSingleOrder ? parseInt(mealSingleOrder) : null;
+    if (mealWeeklySubscription !== undefined) updateData.mealWeeklySubscription = mealWeeklySubscription ? parseInt(mealWeeklySubscription) : null;
+    if (mealMonthlySubscription !== undefined) updateData.mealMonthlySubscription = mealMonthlySubscription ? parseInt(mealMonthlySubscription) : null;
+    
+    // Family Pack
+    if (familyWeight !== undefined) updateData.familyWeight = familyWeight ? familyWeight.trim() : null;
+    if (familyProteinIntake !== undefined) updateData.familyProteinIntake = familyProteinIntake ? familyProteinIntake.trim() : null;
+    if (familySingleOrder !== undefined) updateData.familySingleOrder = familySingleOrder ? parseInt(familySingleOrder) : null;
+    if (familyWeeklySubscription !== undefined) updateData.familyWeeklySubscription = familyWeeklySubscription ? parseInt(familyWeeklySubscription) : null;
+    if (familyMonthlySubscription !== undefined) updateData.familyMonthlySubscription = familyMonthlySubscription ? parseInt(familyMonthlySubscription) : null;
+    
     if (availableDay !== undefined) updateData.availableDay = safeStringify(safeParseJSON(availableDay));
     if (availableTime !== undefined) updateData.availableTime = availableTime ? availableTime.trim() : null;
-    if (singleOrder !== undefined) updateData.singleOrder = parseInt(singleOrder) || 0;
-    if (weeklySubscription !== undefined) updateData.weeklySubscription = parseInt(weeklySubscription) || 0;
-    if (monthlySubscription !== undefined) updateData.monthlySubscription = parseInt(monthlySubscription) || 0;
     if (ingredients !== undefined) updateData.ingredients = safeStringify(safeParseJSON(ingredients));
-    if (discounts !== undefined) updateData.discounts = safeParseJSON(discounts);
     if (description !== undefined) updateData.description = description ? description.trim() : null;
 
     await product.update(updateData);
 
-    // Get updated product with parsed JSON fields
     const updatedProduct = await Product.findByPk(id);
     const formattedProduct = {
       ...updatedProduct.toJSON(),
@@ -278,7 +327,6 @@ export const updateProduct = async (req, res) => {
   } catch (error) {
     console.error("Update product error:", error);
     
-    // Handle Sequelize validation errors
     if (error.name === 'SequelizeValidationError') {
       const validationErrors = error.errors.map(err => err.message);
       return res.status(400).json({
@@ -293,6 +341,9 @@ export const updateProduct = async (req, res) => {
     });
   }
 };
+
+// Keep other functions (deleteProduct, getActiveProducts) as is
+// ... (rest of the functions remain the same)
 
 export const deleteProduct = async (req, res) => {
   try {

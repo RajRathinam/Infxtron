@@ -46,8 +46,6 @@ app.use(
   cors({
     origin: function (origin, callback) {
       const allowedOrigins = [
-        "https://agshealthyfoods.in",
-        "https://www.agshealthyfoods.in",
         process.env.FRONTEND_URL
       ].filter(Boolean);
       
@@ -112,14 +110,7 @@ app.get("/", (req, res) => {
     version: "1.0.0"
   });
 });
-// --- health check (keeps server awake) ---
-app.get("/health", (req, res) => {
-  res.status(200).json({
-    status: "ok",
-    uptime: process.uptime(),
-    time: new Date().toISOString(),
-  });
-});
+
 // API Status
 app.get("/api/status", (req, res) => {
   res.json({

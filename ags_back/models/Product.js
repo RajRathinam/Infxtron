@@ -3,11 +3,35 @@ import sequelize from "../config/database.js";
 
 const Product = sequelize.define("Product", {
   productName: { type: DataTypes.STRING, allowNull: false },
-  packName: { type: DataTypes.STRING, allowNull: false },
-  weight: { type: DataTypes.STRING, allowNull: false },
-  proteinIntake: { type: DataTypes.STRING, allowNull: true },
+  category: { 
+    type: DataTypes.ENUM('veg', 'nonveg', 'eggeterian'),
+    allowNull: false,
+    defaultValue: 'veg'
+  },
+  
+  // Normal Pack
+  normalWeight: { type: DataTypes.STRING, allowNull: false },
+  normalProteinIntake: { type: DataTypes.STRING, allowNull: true },
+  normalSingleOrder: { type: DataTypes.INTEGER, allowNull: false },
+  normalWeeklySubscription: { type: DataTypes.INTEGER, allowNull: false },
+  normalMonthlySubscription: { type: DataTypes.INTEGER, allowNull: false },
+  
+  // Meal Pack
+  mealWeight: { type: DataTypes.STRING, allowNull: true },
+  mealProteinIntake: { type: DataTypes.STRING, allowNull: true },
+  mealSingleOrder: { type: DataTypes.INTEGER, allowNull: true },
+  mealWeeklySubscription: { type: DataTypes.INTEGER, allowNull: true },
+  mealMonthlySubscription: { type: DataTypes.INTEGER, allowNull: true },
+  
+  // Family Pack
+  familyWeight: { type: DataTypes.STRING, allowNull: true },
+  familyProteinIntake: { type: DataTypes.STRING, allowNull: true },
+  familySingleOrder: { type: DataTypes.INTEGER, allowNull: true },
+  familyWeeklySubscription: { type: DataTypes.INTEGER, allowNull: true },
+  familyMonthlySubscription: { type: DataTypes.INTEGER, allowNull: true },
+  
   availableDay: { 
-    type: DataTypes.TEXT, // Changed from ARRAY to TEXT for MySQL
+    type: DataTypes.TEXT,
     allowNull: true,
     get() {
       const value = this.getDataValue('availableDay');
@@ -19,12 +43,9 @@ const Product = sequelize.define("Product", {
     defaultValue: '[]'
   },
   availableTime: { type: DataTypes.STRING, allowNull: true },
-  singleOrder: { type: DataTypes.INTEGER, allowNull: false },
-  weeklySubscription: { type: DataTypes.INTEGER, allowNull: false },
-  monthlySubscription: { type: DataTypes.INTEGER, allowNull: false },
   imagePath: { type: DataTypes.STRING, allowNull: false },
   ingredients: { 
-    type: DataTypes.TEXT, // Changed from ARRAY to TEXT for MySQL
+    type: DataTypes.TEXT,
     allowNull: true,
     get() {
       const value = this.getDataValue('ingredients');
@@ -35,11 +56,13 @@ const Product = sequelize.define("Product", {
     },
     defaultValue: '[]'
   },
-  discounts: { 
-    type: DataTypes.JSON, // Changed from JSONB to JSON for MySQL
-    allowNull: true,
-  },
   description: { type: DataTypes.TEXT, allowNull: true },
+}, {
+  indexes: [
+    {
+      fields: ['category']
+    }
+  ]
 });
 
 export default Product;
