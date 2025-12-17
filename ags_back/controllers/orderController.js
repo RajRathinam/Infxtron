@@ -23,17 +23,6 @@ export const placeOrder = async (req, res) => {
     });
   }
 
-  // Validate delivery date
-  const selectedDate = new Date(deliveryDate);
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  
-  if (selectedDate <= today) {
-    return res.status(400).json({ 
-      message: "Delivery date must be from tomorrow onwards" 
-    });
-  }
-
   if (!/^\d{10}$/.test(phone)) {
     return res.status(400).json({ 
       message: "Phone number must be exactly 10 digits" 
