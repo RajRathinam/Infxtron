@@ -16,7 +16,7 @@ const Order = sequelize.define("Order", {
     allowNull: false,
   },
   deliveryPoint: {
-    type: DataTypes.ENUM("point_a", "point_b", "point_c", "home_delivery"),
+    type: DataTypes.ENUM("point_a", "home_delivery"),
     allowNull: false,
   },
   deliveryCharge: {

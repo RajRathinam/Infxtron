@@ -197,8 +197,9 @@ ${data.additionalNotes || 'None'}
         const price = product.price || 0;
         const total = quantity * price;
         const orderType = product.orderType || "xxx";
+        const packName = product.packName || "ooo";
         
-        productsList += `${index + 1}. ${productName}. (${orderType}) × ${quantity} = ₹${total}\n`;
+        productsList += `${index + 1}. ${productName}.(${packName}).(${orderType}) × ${quantity} = ₹${total}\n`;
       });
     } else {
       productsList = 'No products listed\n';
