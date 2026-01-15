@@ -1,6 +1,53 @@
 import { Cart, Product, User, sequelize } from '../models/index.js';
-import { validateCartItem } from '../utils/validators.js';
-import { getTotalStock, getStockForColor } from '../utils/helpers.js';
+import { getTotalStock } from '../utils/helpers.js';
+
+// Add these helper functions at the top of the file:
+
+const parseProductImages = (product) => {
+  let images = [];
+  
+  if (!product || !product.images) return images;
+  
+  try {
+    // If images is a string, parse it
+    if (typeof product.images === 'string') {
+      const parsed = JSON.parse(product.images);
+      images = Array.isArray(parsed) ? parsed : [];
+    } 
+    // If it's already an array
+    else if (Array.isArray(product.images)) {
+      images = product.images;
+    }
+  } catch (error) {
+    console.error('Error parsing product images:', error);
+    images = [];
+  }
+  
+  return images;
+};
+
+const parseColorsAndImages = (product) => {
+  let colorsAndImages = {};
+  
+  if (!product || !product.colorsAndImages) return colorsAndImages;
+  
+  try {
+    // If colorsAndImages is a string, parse it
+    if (typeof product.colorsAndImages === 'string') {
+      const parsed = JSON.parse(product.colorsAndImages);
+      colorsAndImages = (typeof parsed === 'object' && parsed !== null) ? parsed : {};
+    } 
+    // If it's already an object
+    else if (typeof product.colorsAndImages === 'object' && product.colorsAndImages !== null) {
+      colorsAndImages = product.colorsAndImages;
+    }
+  } catch (error) {
+    console.error('Error parsing colorsAndImages:', error);
+    colorsAndImages = {};
+  }
+  
+  return colorsAndImages;
+};
 
 /**
  * @desc    Get user's cart
@@ -69,6 +116,10 @@ export const getCart = async (req, res) => {
           };
         }
         
+        // Parse product images and colors
+        const productImages = parseProductImages(product);
+        const colorsAndImages = parseColorsAndImages(product);
+        
         // Prepare product data for response
         const productData = {
           id: product.id,
@@ -77,23 +128,26 @@ export const getCart = async (req, res) => {
           price: product.price,
           discountPrice: product.discountPrice,
           isActive: product.isActive,
-          images: product.images || []
+          images: productImages
         };
         
         // If item has an imageUrl already, use it
         // Otherwise, get image from product based on color
         let imageUrl = item.imageUrl;
         
-        if (!imageUrl && product.colorsAndImages && typeof product.colorsAndImages === 'object') {
-          // If item has a colorName, get the image for that color
-          if (item.colorName && product.colorsAndImages[item.colorName]) {
-            const colorImages = product.colorsAndImages[item.colorName];
-            if (Array.isArray(colorImages) && colorImages.length > 0) {
-              // Get the main image (type: 'main') or first image
-              const mainImage = colorImages.find(img => img.type === 'main');
-              imageUrl = mainImage ? mainImage.url : colorImages[0].url;
-            }
+        if (!imageUrl && colorsAndImages[item.colorName]) {
+          const colorImages = colorsAndImages[item.colorName];
+          if (Array.isArray(colorImages) && colorImages.length > 0) {
+            // Get the main image (type: 'main') or first image
+            const mainImage = colorImages.find(img => img.type === 'main');
+            imageUrl = mainImage ? mainImage.url : colorImages[0].url;
           }
+        }
+        
+        // If still no image, use first product image
+        if (!imageUrl && productImages.length > 0) {
+          const firstImage = productImages[0];
+          imageUrl = typeof firstImage === 'object' && firstImage.url ? firstImage.url : firstImage;
         }
         
         return {
@@ -137,7 +191,7 @@ export const addToCart = async (req, res) => {
   const transaction = await sequelize.transaction();
   
   try {
-    const { productId, quantity = 1, colorName, imageUrl } = req.body; // ADD imageUrl here
+    const { productId, quantity = 1, colorName, imageUrl } = req.body;
     const userId = req.user.id;
     
     console.log('Add to cart request:', { productId, quantity, colorName, imageUrl, userId });
@@ -179,53 +233,41 @@ export const addToCart = async (req, res) => {
     const productImages = parseProductImages(product);
     const colorsAndImages = parseColorsAndImages(product);
     
-    // Check if product has colors defined
-    const hasColors = Object.keys(colorsAndImages).length > 0;
+    let finalColorName = colorName || null;
+    let finalImageUrl = imageUrl || null;
     
-    let finalColorName = null;
-    let finalImageUrl = null;
+    // Validate color if provided
+    if (finalColorName && Object.keys(colorsAndImages).length > 0) {
+      const availableColors = Object.keys(colorsAndImages);
+      if (!availableColors.includes(finalColorName)) {
+        console.log('Requested color not in available colors:', finalColorName);
+        finalColorName = null;
+      }
+    }
     
-    // Use the colorName from request if provided
-    if (colorName) {
-      if (hasColors) {
-        const availableColors = Object.keys(colorsAndImages);
-        if (availableColors.includes(colorName)) {
-          finalColorName = colorName;
-        } else {
-          console.log('Requested color not in available colors:', colorName);
-          finalColorName = null;
+    // If no imageUrl from request, try to get from product
+    if (!finalImageUrl) {
+      if (finalColorName && colorsAndImages[finalColorName]) {
+        const colorImages = colorsAndImages[finalColorName];
+        if (Array.isArray(colorImages) && colorImages.length > 0) {
+          const mainImage = colorImages.find(img => img.type === 'main');
+          finalImageUrl = mainImage ? mainImage.url : colorImages[0].url;
         }
-      } else {
-        // Product doesn't have defined colors, but still accept colorName from request
-        finalColorName = colorName;
+      }
+      
+      // If still no image, use first product image
+      if (!finalImageUrl && productImages.length > 0) {
+        const firstImage = productImages[0];
+        finalImageUrl = typeof firstImage === 'object' && firstImage.url ? firstImage.url : firstImage;
       }
     }
     
-    // Priority for imageUrl:
-    // 1. Use imageUrl from request if provided
-    // 2. Use image from product based on color
-    // 3. Use first product image
+    console.log('Final values:', { 
+      colorName: finalColorName, 
+      imageUrl: finalImageUrl 
+    });
     
-    if (imageUrl) {
-      // Use the imageUrl provided in the request
-      finalImageUrl = imageUrl;
-      console.log('Using imageUrl from request:', finalImageUrl);
-    } else if (finalColorName && colorsAndImages[finalColorName]) {
-      // Get image for the selected color
-      const colorImages = colorsAndImages[finalColorName];
-      if (Array.isArray(colorImages) && colorImages.length > 0) {
-        const mainImage = colorImages.find(img => img.type === 'main');
-        finalImageUrl = mainImage ? mainImage.url : colorImages[0].url;
-        console.log('Using image for color:', { color: finalColorName, imageUrl: finalImageUrl });
-      }
-    } else if (productImages.length > 0) {
-      // Use first product image
-      const firstImage = productImages[0];
-      finalImageUrl = typeof firstImage === 'object' && firstImage.url ? firstImage.url : firstImage;
-      console.log('Using first product image:', finalImageUrl);
-    }
-    
-    // Check stock availability
+    // Check stock
     const requestedQuantity = parseInt(quantity) || 1;
     const totalStock = getTotalStock(product.stock);
     
@@ -236,11 +278,6 @@ export const addToCart = async (req, res) => {
         message: `Only ${totalStock} items available in stock`
       });
     }
-    
-    console.log('Final values:', { 
-      colorName: finalColorName, 
-      imageUrl: finalImageUrl 
-    });
     
     // Get or create cart
     let cart = await Cart.findOne({
@@ -255,10 +292,9 @@ export const addToCart = async (req, res) => {
         items: [],
         totalAmount: 0
       }, { transaction, raw: false });
-      console.log('Created new cart');
     }
     
-    // Ensure items is always an array
+    // Parse items
     let items = [];
     if (cart.items) {
       if (Array.isArray(cart.items)) {
@@ -274,53 +310,45 @@ export const addToCart = async (req, res) => {
       }
     }
     
-    console.log('Current items in cart:', items.length);
-    
     // Check if item already exists
     const existingItemIndex = items.findIndex(item => {
       const itemProductId = String(item.productId);
       const reqProductId = String(productId);
       
-      // Compare product ID
       if (itemProductId !== reqProductId) return false;
       
-      // Compare color - both null or same value
+      // Compare color
       const itemColor = item.colorName || null;
       const reqColor = finalColorName || null;
       
       return itemColor === reqColor;
     });
     
-    console.log('Existing item index:', existingItemIndex);
-    
     const itemPrice = parseFloat(product.discountPrice || product.price) || 0;
     
     if (existingItemIndex > -1) {
-      // Update existing item - preserve imageUrl if already exists
+      // Update existing item
       items[existingItemIndex].quantity += requestedQuantity;
       items[existingItemIndex].price = itemPrice;
       items[existingItemIndex].updatedAt = new Date();
       
-      // Only update imageUrl if not already set or if new imageUrl is provided
-      if (!items[existingItemIndex].imageUrl && finalImageUrl) {
+      // Update imageUrl if provided
+      if (finalImageUrl && !items[existingItemIndex].imageUrl) {
         items[existingItemIndex].imageUrl = finalImageUrl;
       }
-      
-      console.log('Updated existing item:', items[existingItemIndex]);
     } else {
-      // Add new item with ALL data
+      // Add new item
       const newItem = {
         productId: String(productId),
         productName: product.name,
         quantity: requestedQuantity,
-        colorName: finalColorName, // Use the determined color name
+        colorName: finalColorName,
         price: itemPrice,
-        imageUrl: finalImageUrl, // Use the determined image URL
+        imageUrl: finalImageUrl,
         addedAt: new Date(),
         updatedAt: new Date()
       };
       
-      console.log('Adding new item to cart:', newItem);
       items.push(newItem);
     }
     
@@ -328,9 +356,6 @@ export const addToCart = async (req, res) => {
     const totalAmount = items.reduce((total, item) => {
       return total + ((item.price || 0) * (item.quantity || 1));
     }, 0);
-    
-    console.log('Total items in cart:', items.length);
-    console.log('Total amount:', totalAmount);
     
     // Save cart
     await cart.update({
@@ -340,9 +365,6 @@ export const addToCart = async (req, res) => {
     
     await transaction.commit();
     
-    console.log('Transaction committed successfully');
-    
-    // Return response with items
     res.status(200).json({
       success: true,
       message: 'Item added to cart successfully',
@@ -350,8 +372,7 @@ export const addToCart = async (req, res) => {
         id: cart.id,
         userId: cart.userId,
         items: items,
-        totalAmount: totalAmount,
-        itemCount: items.length
+        totalAmount: totalAmount
       }
     });
     
@@ -371,14 +392,14 @@ export const updateCartItem = async (req, res) => {
   
   try {
     const { productId } = req.params;
-    const { quantity, colorName = null, imageUrl } = req.body; // ADD imageUrl
+    const { quantity, colorName = null, imageUrl } = req.body;
     const userId = req.user.id;
     
     console.log('Update cart item request:', { 
       productId, 
       quantity, 
       colorName, 
-      imageUrl, // Log imageUrl
+      imageUrl,
       userId
     });
     
@@ -421,17 +442,13 @@ export const updateCartItem = async (req, res) => {
       }
     }
     
-    console.log('Items in cart:', items.length);
-    
     // Find item in cart
     const itemIndex = items.findIndex(item => {
       const itemProductId = String(item.productId);
       const reqProductId = String(productId);
       
-      // Compare product ID
       if (itemProductId !== reqProductId) return false;
       
-      // Compare color - both null or same value
       const itemColor = item.colorName || null;
       const reqColor = colorName || null;
       
@@ -446,8 +463,6 @@ export const updateCartItem = async (req, res) => {
       });
     }
     
-    console.log('Item before update:', items[itemIndex]);
-    
     // Check product stock if needed
     const product = await Product.findByPk(productId, { transaction });
     if (product) {
@@ -460,7 +475,6 @@ export const updateCartItem = async (req, res) => {
         });
       }
       
-      // Update price from current product price
       items[itemIndex].price = product.discountPrice || product.price;
     }
     
@@ -473,15 +487,11 @@ export const updateCartItem = async (req, res) => {
       items[itemIndex].imageUrl = imageUrl;
     }
     
-    console.log('Item after update:', items[itemIndex]);
-    
     // Calculate total amount
     const totalAmount = items.reduce((total, item) => {
       const itemTotal = (parseFloat(item.price) || 0) * (item.quantity || 1);
       return total + itemTotal;
     }, 0);
-    
-    console.log('New total amount:', totalAmount);
     
     // Update cart
     cart.setDataValue('items', items);
@@ -491,8 +501,6 @@ export const updateCartItem = async (req, res) => {
     await cart.save({ transaction });
     
     await transaction.commit();
-    
-    console.log('Transaction committed');
     
     res.status(200).json({
       success: true,
@@ -514,6 +522,8 @@ export const updateCartItem = async (req, res) => {
     });
   }
 };
+
+// ... rest of the functions (removeFromCart, clearCart, getCartItemCount) remain the same
 /**
  * @desc    Remove item from cart
  * @route   DELETE /api/cart/items/:productId
