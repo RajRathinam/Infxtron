@@ -105,12 +105,3 @@ export const sendOrderDeliveredSMS = async (phone, orderNumber) => {
 
   return await sendSMS(phone, message);
 };
-
-/**
- * Send EMI reminder SMS
- */
-export const sendEMIReminderSMS = async (phone, orderNumber, installmentNumber, amount, dueDate) => {
-  const message = `Reminder: Your EMI installment #${installmentNumber} for order ${orderNumber} is due on ${dueDate}. Amount: ₹${amount.toFixed(2)}. Please make the payment to avoid late fees.`;
-
-  return await sendSMS(phone, message);
-};

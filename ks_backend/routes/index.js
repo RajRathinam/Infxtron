@@ -9,8 +9,6 @@ import reviewRoutes from './reviewRoutes.js';
 import couponRoutes from './couponRoutes.js';
 import categoryRoutes from './categoryRoutes.js';
 import brandRoutes from './brandRoutes.js';
-import emiRoutes from './emiRoutes.js';
-import adminEmiRoutes from './adminEmiRoutes.js';
 import modelRoutes from './modelRoutes.js';
 
 export {
@@ -25,7 +23,5 @@ export {
   couponRoutes,
   categoryRoutes,
   brandRoutes,
-  emiRoutes,
-  adminEmiRoutes,
   modelRoutes
 };

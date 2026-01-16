@@ -11,8 +11,6 @@ import Review from './Review.js';
 import Coupon from './Coupon.js';
 import UserCoupon from './UserCoupon.js';
 import Model from './Model.js';
-import EmiPayment from './EmiPayment.js';
-import EmiInstallment from './EmiInstallment.js';
 import Sequelize from 'sequelize';
 
 // Define associations - ONLY ONCE PER ASSOCIATION
@@ -67,16 +65,6 @@ Brand.hasMany(Model, { foreignKey: 'brandId', as: 'models' });
 Model.belongsTo(Brand, { foreignKey: 'brandId', as: 'brand' });
 Model.belongsTo(Category, { foreignKey: 'categoryId', as: 'category' });
 
-// EMI associations
-EmiPayment.belongsTo(Order, { foreignKey: 'orderId', as: 'order' });
-EmiPayment.belongsTo(User, { foreignKey: 'userId', as: 'user' });
-EmiPayment.hasMany(EmiInstallment, { foreignKey: 'emiPaymentId', as: 'installments' });
-
-EmiInstallment.belongsTo(EmiPayment, { foreignKey: 'emiPaymentId', as: 'emiPayment' });
-
-Order.hasOne(EmiPayment, { foreignKey: 'orderId', as: 'emiPayment' });
-User.hasMany(EmiPayment, { foreignKey: 'userId', as: 'emiPayments' });
-
 // OTP associations
 Otp.belongsTo(User, { foreignKey: 'phone', targetKey: 'phone', as: 'user' });
 
@@ -94,7 +82,5 @@ export {
   Review,
   Coupon,
   UserCoupon,
-  Model,
-  EmiPayment,
-  EmiInstallment
+  Model
 };

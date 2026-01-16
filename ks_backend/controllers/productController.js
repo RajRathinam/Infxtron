@@ -25,12 +25,12 @@ export const getProducts = async (req, res) => {
       availability,
       isFeatured
     } = req.query;
-    
+
     const offset = (page - 1) * limit;
-    
+
     // Build where clause
     const where = { isActive: true };
-    
+
     // Allow filtering by category by id or slug
     if (categoryId) where.categoryId = categoryId;
     if (categorySlug) {
@@ -41,7 +41,7 @@ export const getProducts = async (req, res) => {
     if (brandId) where.brandId = brandId;
     if (availability !== undefined) where.availability = availability === 'true';
     if (isFeatured !== undefined) where.isFeatured = isFeatured === 'true';
-    
+
     if (minPrice || maxPrice) {
       where.price = {};
       if (minPrice) where.price[Sequelize.Op.gte] = parseFloat(minPrice);
@@ -59,28 +59,72 @@ export const getProducts = async (req, res) => {
     });
     const computedMinPrice = priceRangeResult ? parseFloat(priceRangeResult.minPrice || 0) : 0;
     const computedMaxPrice = priceRangeResult ? parseFloat(priceRangeResult.maxPrice || 0) : 0;
-    
+
     if (search) {
+      const searchLower = search.toLowerCase().trim();
+
+      // Keyword mapping for better results
+      const keywordMap = {
+        'tv': ['tv', 'television', 'smart tv', 'led'],
+        'fridge': ['fridge', 'refrigerator', 'freezer'],
+        'ac': ['ac', 'air conditioner', 'cooling'],
+        'washing': ['washing machine', 'washer', 'laundry'],
+        'mobile': ['mobile', 'phone', 'smartphone'],
+        'laptop': ['laptop', 'notebook', 'computer']
+      };
+
+      // Check if search term matches any keyword key
+      let searchTerms = [searchLower];
+      Object.keys(keywordMap).forEach(key => {
+        if (searchLower.includes(key) || key.includes(searchLower)) {
+          searchTerms = [...searchTerms, ...keywordMap[key]];
+        }
+      });
+
+      // Remove duplicates
+      searchTerms = [...new Set(searchTerms)];
+
+      // Build complex OR query
       where[Sequelize.Op.or] = [
         { name: { [Sequelize.Op.like]: `%${search}%` } },
         { code: { [Sequelize.Op.like]: `%${search}%` } },
         { description: { [Sequelize.Op.like]: `%${search}%` } },
         { sku: { [Sequelize.Op.like]: `%${search}%` } },
         { variant: { [Sequelize.Op.like]: `%${search}%` } },
-        { subcategory: { [Sequelize.Op.like]: `%${search}%` } } // Added subcategory to search
+        { subcategory: { [Sequelize.Op.like]: `%${search}%` } },
+        // Search in keywords JSON array if supported by DB (MySQL JSON) or string
+        Sequelize.literal(`JSON_SEARCH(keywords, 'one', '%${search}%') IS NOT NULL`),
+        // Search in related Category name
+        Sequelize.literal(`EXISTS (SELECT 1 FROM categories WHERE categories.id = Product.categoryId AND categories.name LIKE '%${search}%')`),
+        // Search in related Brand name
+        Sequelize.literal(`EXISTS (SELECT 1 FROM brands WHERE brands.id = Product.brandId AND brands.name LIKE '%${search}%')`)
       ];
+
+      // Add mapped keywords to search if any
+      if (searchTerms.length > 1) {
+        // This is a simplified approach. For full keyword expansion, we might strictly OR them all.
+        // But merging them into the existing OR array is cleaner.
+        // Let's iterate and add simple name matches for mapped terms
+        searchTerms.forEach(term => {
+          if (term !== searchLower) {
+            where[Sequelize.Op.or].push({ name: { [Sequelize.Op.like]: `%${term}%` } });
+            where[Sequelize.Op.or].push({ description: { [Sequelize.Op.like]: `%${term}%` } });
+            where[Sequelize.Op.or].push({ subcategory: { [Sequelize.Op.like]: `%${term}%` } });
+          }
+        });
+      }
     }
-    
+
     // Validate sort field
     const allowedSortFields = [
       'name', 'price', 'rating', 'created_at', 'updatedAt',
       'discountPercentage', 'stock'
     ];
     const validSortBy = allowedSortFields.includes(sortBy) ? sortBy : 'created_at';
-    const validSortOrder = ['asc', 'desc'].includes(sortOrder.toLowerCase()) 
-      ? sortOrder.toLowerCase() 
+    const validSortOrder = ['asc', 'desc'].includes(sortOrder.toLowerCase())
+      ? sortOrder.toLowerCase()
       : 'desc';
-    
+
     const { count, rows: products } = await Product.findAndCountAll({
       where,
       limit: parseInt(limit),
@@ -90,28 +134,32 @@ export const getProducts = async (req, res) => {
         {
           model: Category,
           as: 'category',
-          attributes: ['id', 'name', 'slug', 'subcategories']
+          attributes: ['id', 'name', 'slug', 'subcategories'],
+          required: false // Left join to ensuring we don't filter out if not matched, but we are filtering in WHERE so this might need adjustment if using top level OR
         },
         {
           model: Brand,
           as: 'brand',
-          attributes: ['id', 'name', 'slug']
+          attributes: ['id', 'name', 'slug'],
+          required: false
         },
         {
           model: User,
           as: 'seller',
           attributes: ['id', 'name', 'slug']
         }
-      ]
+      ],
+      // Add distinct to prevent duplicates from joins if using hasMany (not the case here usually but good practice)
+      distinct: true
     });
-    
+
     // Get unique subcategories for the filtered products
     const uniqueSubcategories = await Product.findAll({
       where,
       attributes: [[Sequelize.fn('DISTINCT', Sequelize.col('subcategory')), 'subcategory']],
       raw: true
     }).then(results => results.filter(r => r.subcategory).map(r => r.subcategory));
-    
+
     res.status(200).json({
       success: true,
       data: {
@@ -151,17 +199,17 @@ export const getProducts = async (req, res) => {
 export const getProduct = async (req, res) => {
   try {
     const { identifier } = req.params;
-    
+
     // Check if identifier is numeric ID or slug
     const where = { isActive: true };
     const isNumeric = !isNaN(identifier);
-    
+
     if (isNumeric) {
       where.id = parseInt(identifier);
     } else {
       where.slug = identifier;
     }
-    
+
     const product = await Product.findOne({
       where,
       include: [
@@ -182,14 +230,14 @@ export const getProduct = async (req, res) => {
         }
       ]
     });
-    
+
     if (!product) {
       return res.status(404).json({
         success: false,
         message: 'Product not found'
       });
     }
-    
+
     // Clean up description if it contains error messages
     let cleanDescription = product.description;
     if (cleanDescription) {
@@ -213,7 +261,7 @@ export const getProduct = async (req, res) => {
         }
       }
     }
-    
+
     // Get related reviews
     const reviews = await Review.findAll({
       where: { productId: product.id, isActive: true },
@@ -226,7 +274,7 @@ export const getProduct = async (req, res) => {
       order: [['created_at', 'DESC']],
       limit: 20
     });
-    
+
     // Get related products (same category and brand)
     const relatedProducts = await Product.findAll({
       where: {
@@ -251,7 +299,7 @@ export const getProduct = async (req, res) => {
         }
       ]
     });
-    
+
     // Prepare product data with cleaned description
     const productData = {
       ...product.toJSON(),
@@ -262,7 +310,7 @@ export const getProduct = async (req, res) => {
       totalReviews: product.totalReviews || 0,
       relatedProducts
     };
-    
+
     res.status(200).json({
       success: true,
       data: productData
@@ -296,57 +344,94 @@ export const getProductsByCategory = async (req, res) => {
       sortOrder = 'desc',
       availability
     } = req.query;
-    
+
     const offset = (page - 1) * limit;
-    
+
     // Find category by slug
-    const category = await Category.findOne({ 
-      where: { slug: categorySlug, isActive: true } 
+    const category = await Category.findOne({
+      where: { slug: categorySlug, isActive: true }
     });
-    
+
     if (!category) {
       return res.status(404).json({
         success: false,
         message: 'Category not found'
       });
     }
-    
+
     // Build where clause
-    const where = { 
+    const where = {
       categoryId: category.id,
-      isActive: true 
+      isActive: true
     };
-    
+
     if (subcategory) where.subcategory = subcategory;
     if (brandId) where.brandId = brandId;
     if (availability !== undefined) where.availability = availability === 'true';
-    
+
     if (minPrice || maxPrice) {
       where.price = {};
       if (minPrice) where.price[Sequelize.Op.gte] = parseFloat(minPrice);
       if (maxPrice) where.price[Sequelize.Op.lte] = parseFloat(maxPrice);
     }
-    
+
     if (search) {
+      const searchLower = search.toLowerCase().trim();
+
+      // Keyword mapping for better results
+      const keywordMap = {
+        'tv': ['tv', 'television', 'smart tv', 'led'],
+        'fridge': ['fridge', 'refrigerator', 'freezer'],
+        'ac': ['ac', 'air conditioner', 'cooling'],
+        'washing': ['washing machine', 'washer', 'laundry'],
+        'mobile': ['mobile', 'phone', 'smartphone'],
+        'laptop': ['laptop', 'notebook', 'computer']
+      };
+
+      // Check if search term matches any keyword key
+      let searchTerms = [searchLower];
+      Object.keys(keywordMap).forEach(key => {
+        if (searchLower.includes(key) || key.includes(searchLower)) {
+          searchTerms = [...searchTerms, ...keywordMap[key]];
+        }
+      });
+
+      // Remove duplicates
+      searchTerms = [...new Set(searchTerms)];
+
       where[Sequelize.Op.or] = [
         { name: { [Sequelize.Op.like]: `%${search}%` } },
         { code: { [Sequelize.Op.like]: `%${search}%` } },
         { description: { [Sequelize.Op.like]: `%${search}%` } },
         { sku: { [Sequelize.Op.like]: `%${search}%` } },
-        { variant: { [Sequelize.Op.like]: `%${search}%` } }
+        { variant: { [Sequelize.Op.like]: `%${search}%` } },
+        // Search in keywords JSON array
+        Sequelize.literal(`JSON_SEARCH(keywords, 'one', '%${search}%') IS NOT NULL`),
+        // Search in related Brand name (category is already filtered)
+        Sequelize.literal(`EXISTS (SELECT 1 FROM brands WHERE brands.id = Product.brandId AND brands.name LIKE '%${search}%')`)
       ];
+
+      // Add mapped keywords to search if any
+      if (searchTerms.length > 1) {
+        searchTerms.forEach(term => {
+          if (term !== searchLower) {
+            where[Sequelize.Op.or].push({ name: { [Sequelize.Op.like]: `%${term}%` } });
+            where[Sequelize.Op.or].push({ description: { [Sequelize.Op.like]: `%${term}%` } });
+          }
+        });
+      }
     }
-    
+
     // Validate sort field
     const allowedSortFields = [
       'name', 'price', 'rating', 'created_at', 'updatedAt',
       'discountPercentage', 'stock'
     ];
     const validSortBy = allowedSortFields.includes(sortBy) ? sortBy : 'created_at';
-    const validSortOrder = ['asc', 'desc'].includes(sortOrder.toLowerCase()) 
-      ? sortOrder.toLowerCase() 
+    const validSortOrder = ['asc', 'desc'].includes(sortOrder.toLowerCase())
+      ? sortOrder.toLowerCase()
       : 'desc';
-    
+
     const { count, rows: products } = await Product.findAndCountAll({
       where,
       limit: parseInt(limit),
@@ -370,14 +455,14 @@ export const getProductsByCategory = async (req, res) => {
         }
       ]
     });
-    
+
     // Get unique subcategories for this category
     const uniqueSubcategories = await Product.findAll({
       where: { categoryId: category.id, isActive: true },
       attributes: [[Sequelize.fn('DISTINCT', Sequelize.col('subcategory')), 'subcategory']],
       raw: true
     }).then(results => results.filter(r => r.subcategory).map(r => r.subcategory));
-    
+
     // Get brands in this category
     const categoryBrands = await Brand.findAll({
       include: [{
@@ -388,7 +473,7 @@ export const getProductsByCategory = async (req, res) => {
       }],
       attributes: ['id', 'name', 'slug']
     });
-    
+
     // Compute price range for this category
     const priceRangeResult = await Product.findOne({
       where: { categoryId: category.id, isActive: true },
@@ -400,7 +485,7 @@ export const getProductsByCategory = async (req, res) => {
     });
     const computedMinPrice = priceRangeResult ? parseFloat(priceRangeResult.minPrice || 0) : 0;
     const computedMaxPrice = priceRangeResult ? parseFloat(priceRangeResult.maxPrice || 0) : 0;
-    
+
     res.status(200).json({
       success: true,
       data: {
@@ -441,7 +526,7 @@ export const getProductsByCategory = async (req, res) => {
  */
 export const createProduct = async (req, res) => {
   const transaction = await sequelize.transaction();
-  
+
   try {
     let {
       code,
@@ -465,14 +550,14 @@ export const createProduct = async (req, res) => {
       keywords,
       sellerId
     } = req.body;
-    
+
     console.log('Creating product with data:', {
       code, name, brandId, categoryId, subcategory, price,
       uploadedFilesCount: req.uploadedFiles?.length || 0,
       hasColorsAndImages: !!colorsAndImages,
       sellerId
     });
-    
+
     // Validate required fields
     if (!code || !name || !brandId || !categoryId || !price || (!modelId && !(req.body.modelCode && req.body.modelName))) {
       await transaction.rollback();
@@ -481,7 +566,7 @@ export const createProduct = async (req, res) => {
         message: 'Code, name, brandId, categoryId, price and model (id or modelCode+modelName) are required'
       });
     }
-    
+
     // Validate subcategory against category's allowed subcategories
     if (subcategory && categoryId) {
       const category = await Category.findByPk(categoryId, { transaction });
@@ -495,12 +580,12 @@ export const createProduct = async (req, res) => {
         }
       }
     }
-    
+
     // Validate colorsAndImages or uploadedFiles
-    const hasColorsAndImages = colorsAndImages && 
+    const hasColorsAndImages = colorsAndImages &&
       (typeof colorsAndImages === 'string' ? colorsAndImages.trim() : JSON.stringify(colorsAndImages)) !== '{}';
     const hasUploadedFiles = req.uploadedFiles && req.uploadedFiles.length > 0;
-    
+
     if (!hasColorsAndImages && !hasUploadedFiles) {
       await transaction.rollback();
       return res.status(400).json({
@@ -508,18 +593,18 @@ export const createProduct = async (req, res) => {
         message: 'colorsAndImages or image files are required'
       });
     }
-    
+
     // Parse colorsAndImages if provided
     let parsedColorsAndImages = {};
     if (hasColorsAndImages) {
       try {
-        parsedColorsAndImages = typeof colorsAndImages === 'string' 
-          ? JSON.parse(colorsAndImages) 
+        parsedColorsAndImages = typeof colorsAndImages === 'string'
+          ? JSON.parse(colorsAndImages)
           : colorsAndImages;
-        
+
         // Validate it's a non-empty object
-        if (!parsedColorsAndImages || typeof parsedColorsAndImages !== 'object' || 
-            Object.keys(parsedColorsAndImages).length === 0) {
+        if (!parsedColorsAndImages || typeof parsedColorsAndImages !== 'object' ||
+          Object.keys(parsedColorsAndImages).length === 0) {
           await transaction.rollback();
           return res.status(400).json({
             success: false,
@@ -534,7 +619,7 @@ export const createProduct = async (req, res) => {
         });
       }
     }
-    
+
     // Get brand, category
     const [brand, category] = await Promise.all([
       Brand.findByPk(brandId, { transaction }),
@@ -578,21 +663,21 @@ export const createProduct = async (req, res) => {
       raw: true,
       transaction
     }).then(products => products.map(p => p.slug));
-    
+
     let slug = baseSlug;
     let counter = 1;
-    
+
     while (existingSlugs.includes(slug)) {
       slug = `${baseSlug}-${counter}`;
       counter++;
     }
-    
+
     // Process uploaded files and merge with colorsAndImages
     let finalColorsAndImages = { ...parsedColorsAndImages };
-    
+
     if (hasUploadedFiles) {
       console.log('Processing uploaded files:', req.uploadedFiles.length);
-      
+
       // Handle fileColorMapping if provided
       if (req.body.fileColorMapping) {
         let fileColorMapping;
@@ -608,7 +693,7 @@ export const createProduct = async (req, res) => {
             message: 'Invalid fileColorMapping JSON format'
           });
         }
-        
+
         // Use for...of instead of forEach for proper error handling
         for (const [colorName, fileIndices] of Object.entries(fileColorMapping)) {
           if (!Array.isArray(fileIndices)) {
@@ -618,18 +703,18 @@ export const createProduct = async (req, res) => {
               message: `fileIndices for color "${colorName}" must be an array`
             });
           }
-          
+
           if (!finalColorsAndImages[colorName]) {
             finalColorsAndImages[colorName] = [];
           }
-          
+
           // Process each file index
           for (let i = 0; i < fileIndices.length; i++) {
             const fileIndex = fileIndices[i];
             if (fileIndex >= 0 && fileIndex < req.uploadedFiles.length) {
               const file = req.uploadedFiles[fileIndex];
               console.log(`Adding file ${fileIndex} to color "${colorName}":`, file.url);
-              
+
               finalColorsAndImages[colorName].push({
                 url: file.url,
                 publicId: file.publicId,
@@ -643,14 +728,14 @@ export const createProduct = async (req, res) => {
         // Single color specified - add all files to that color
         const colorName = req.body.colorName;
         console.log(`Adding all files to color: "${colorName}"`);
-        
+
         if (!finalColorsAndImages[colorName]) {
           finalColorsAndImages[colorName] = [];
         }
-        
+
         req.uploadedFiles.forEach((file, index) => {
           console.log(`Adding file to ${colorName}:`, file.url);
-          
+
           finalColorsAndImages[colorName].push({
             url: file.url,
             publicId: file.publicId,
@@ -662,14 +747,14 @@ export const createProduct = async (req, res) => {
         // Default: Add all uploaded files to a default color
         const defaultColor = req.body.defaultColor || 'Default';
         console.log(`Adding all files to default color: "${defaultColor}"`);
-        
+
         if (!finalColorsAndImages[defaultColor]) {
           finalColorsAndImages[defaultColor] = [];
         }
-        
+
         req.uploadedFiles.forEach((file, index) => {
           console.log(`Adding file to ${defaultColor}:`, file.url);
-          
+
           finalColorsAndImages[defaultColor].push({
             url: file.url,
             publicId: file.publicId,
@@ -679,7 +764,7 @@ export const createProduct = async (req, res) => {
         });
       }
     }
-    
+
     // Validate finalColorsAndImages has at least one color with images
     if (Object.keys(finalColorsAndImages).length === 0) {
       await transaction.rollback();
@@ -688,7 +773,7 @@ export const createProduct = async (req, res) => {
         message: 'At least one color with images is required'
       });
     }
-    
+
     // Validate each color has at least one image
     for (const [colorName, images] of Object.entries(finalColorsAndImages)) {
       if (!Array.isArray(images) || images.length === 0) {
@@ -698,7 +783,7 @@ export const createProduct = async (req, res) => {
           message: `Color "${colorName}" must have at least one image`
         });
       }
-      
+
       // Ensure each color has exactly one main image
       const mainImages = images.filter(img => img.type === 'main');
       if (mainImages.length !== 1) {
@@ -708,23 +793,23 @@ export const createProduct = async (req, res) => {
           message: `Color "${colorName}" must have exactly one main image`
         });
       }
-      
+
       // Log image URLs for debugging
       console.log(`Color "${colorName}" has ${images.length} images:`);
       images.forEach((img, idx) => {
         console.log(`  ${idx + 1}. ${img.url} (${img.type})`);
       });
     }
-    
+
     // Parse stock - should match colors in colorsAndImages
     let parsedStock = {};
     const colorNames = Object.keys(finalColorsAndImages);
-    
+
     if (stock) {
       if (typeof stock === 'string') {
         try {
           parsedStock = JSON.parse(stock);
-          
+
           // Validate parsed stock matches color structure
           if (typeof parsedStock !== 'object' || parsedStock === null) {
             throw new Error('Invalid stock format');
@@ -746,19 +831,19 @@ export const createProduct = async (req, res) => {
         });
       }
     }
-    
+
     // Ensure stock exists for all colors with default value 0
     colorNames.forEach(colorName => {
       if (parsedStock[colorName] === undefined || isNaN(parsedStock[colorName])) {
         parsedStock[colorName] = 0;
       }
     });
-    
+
     // Parse other fields
     const parsedPrice = parseFloat(price);
     const parsedDiscountPrice = discountPrice ? parseFloat(discountPrice) : null;
     const parsedTax = tax ? parseFloat(tax) : 0;
-    
+
     if (isNaN(parsedPrice) || parsedPrice < 0) {
       await transaction.rollback();
       return res.status(400).json({
@@ -766,7 +851,7 @@ export const createProduct = async (req, res) => {
         message: 'Price must be a valid positive number'
       });
     }
-    
+
     if (parsedDiscountPrice !== null && (isNaN(parsedDiscountPrice) || parsedDiscountPrice < 0)) {
       await transaction.rollback();
       return res.status(400).json({
@@ -774,14 +859,14 @@ export const createProduct = async (req, res) => {
         message: 'Discount price must be a valid positive number'
       });
     }
-    
+
     // Parse attributes and keywords
     let parsedAttributes = {};
     let parsedKeywords = [];
-    
+
     try {
-      parsedAttributes = attributes ? 
-        (typeof attributes === 'string' ? JSON.parse(attributes) : attributes) : 
+      parsedAttributes = attributes ?
+        (typeof attributes === 'string' ? JSON.parse(attributes) : attributes) :
         {};
     } catch (error) {
       await transaction.rollback();
@@ -790,10 +875,10 @@ export const createProduct = async (req, res) => {
         message: 'Invalid attributes JSON format'
       });
     }
-    
+
     try {
-      parsedKeywords = keywords ? 
-        (typeof keywords === 'string' ? JSON.parse(keywords) : keywords) : 
+      parsedKeywords = keywords ?
+        (typeof keywords === 'string' ? JSON.parse(keywords) : keywords) :
         [];
     } catch (error) {
       await transaction.rollback();
@@ -802,14 +887,14 @@ export const createProduct = async (req, res) => {
         message: 'Invalid keywords JSON format'
       });
     }
-    
+
     // Determine if featured
     const isProductFeatured = isFeatured === true || isFeatured === 'true' || isFeatured === '1';
-    
+
     // Handle sellerId
     const sellerIdValue = sellerId || req.user?.id || null;
     console.log('Using sellerId:', sellerIdValue);
-    
+
     // Create product with subcategory string
     const product = await Product.create({
       code,
@@ -835,9 +920,9 @@ export const createProduct = async (req, res) => {
       metaDescription: metaDescription || null,
       keywords: parsedKeywords
     }, { transaction });
-    
+
     await transaction.commit();
-    
+
     console.log('Product created successfully:', {
       id: product.id,
       name: product.name,
@@ -845,7 +930,7 @@ export const createProduct = async (req, res) => {
       colorsCount: Object.keys(finalColorsAndImages).length,
       imagesCount: Object.values(finalColorsAndImages).flat().length
     });
-    
+
     res.status(201).json({
       success: true,
       message: 'Product created successfully',
@@ -856,9 +941,9 @@ export const createProduct = async (req, res) => {
     if (transaction && !transaction.finished) {
       await transaction.rollback();
     }
-    
+
     console.error('Create product error:', error);
-    
+
     // Handle specific errors
     if (error.name === 'SequelizeUniqueConstraintError') {
       const field = error.errors[0]?.path || 'unknown';
@@ -867,7 +952,7 @@ export const createProduct = async (req, res) => {
         message: `${field} already exists`
       });
     }
-    
+
     if (error.name === 'SequelizeValidationError') {
       const messages = error.errors.map(err => err.message);
       return res.status(400).json({
@@ -876,7 +961,7 @@ export const createProduct = async (req, res) => {
         errors: messages
       });
     }
-    
+
     res.status(500).json({
       success: false,
       message: 'Server error while creating product',
@@ -895,10 +980,10 @@ export const createProduct = async (req, res) => {
  */
 export const updateProduct = async (req, res) => {
   const transaction = await sequelize.transaction();
-  
+
   try {
     const product = await Product.findByPk(req.params.id, { transaction });
-    
+
     if (!product) {
       await transaction.rollback();
       return res.status(404).json({
@@ -906,7 +991,7 @@ export const updateProduct = async (req, res) => {
         message: 'Product not found'
       });
     }
-    
+
     // Check ownership (admin or seller)
     if (req.user.role !== 'admin' && product.sellerId !== req.user.id) {
       await transaction.rollback();
@@ -915,7 +1000,7 @@ export const updateProduct = async (req, res) => {
         message: 'Not authorized to update this product'
       });
     }
-    
+
     const updateData = { ...req.body };
 
     // Support updating model via modelId (legacy) or direct modelCode/modelName
@@ -945,11 +1030,11 @@ export const updateProduct = async (req, res) => {
         });
       }
     }
-    
+
     // Handle uploaded files for colorsAndImages
     if (req.uploadedFiles && req.uploadedFiles.length > 0) {
       let finalColorsAndImages = updateData.colorsAndImages || product.colorsAndImages || {};
-      
+
       if (req.body.fileColorMapping) {
         // Map files to specific colors
         let fileColorMapping;
@@ -964,12 +1049,12 @@ export const updateProduct = async (req, res) => {
             message: 'Invalid fileColorMapping JSON format'
           });
         }
-        
+
         Object.entries(fileColorMapping).forEach(([colorName, fileIndices]) => {
           if (!finalColorsAndImages[colorName]) {
             finalColorsAndImages[colorName] = [];
           }
-          
+
           fileIndices.forEach((fileIndex, imgIndex) => {
             if (req.uploadedFiles[fileIndex]) {
               finalColorsAndImages[colorName].push({
@@ -996,10 +1081,10 @@ export const updateProduct = async (req, res) => {
           });
         });
       }
-      
+
       updateData.colorsAndImages = finalColorsAndImages;
     }
-    
+
     // Handle stock update (should match colors)
     if (updateData.stock) {
       try {
@@ -1010,7 +1095,7 @@ export const updateProduct = async (req, res) => {
         // If not JSON, keep as is
       }
     }
-    
+
     // Parse JSON fields
     if (updateData.attributes) {
       try {
@@ -1025,7 +1110,7 @@ export const updateProduct = async (req, res) => {
         });
       }
     }
-    
+
     if (updateData.keywords) {
       try {
         updateData.keywords = typeof updateData.keywords === 'string'
@@ -1039,12 +1124,12 @@ export const updateProduct = async (req, res) => {
         });
       }
     }
-    
+
     // Update product
     await product.update(updateData, { transaction });
-    
+
     await transaction.commit();
-    
+
     const updatedProduct = await Product.findByPk(req.params.id, {
       include: [
         {
@@ -1059,7 +1144,7 @@ export const updateProduct = async (req, res) => {
         }
       ]
     });
-    
+
     res.status(200).json({
       success: true,
       message: 'Product updated successfully',
@@ -1068,7 +1153,7 @@ export const updateProduct = async (req, res) => {
   } catch (error) {
     await transaction.rollback();
     console.error('Update product error:', error);
-    
+
     if (error.name === 'SequelizeUniqueConstraintError') {
       const field = error.errors[0].path;
       return res.status(400).json({
@@ -1076,7 +1161,7 @@ export const updateProduct = async (req, res) => {
         message: `${field} already exists`
       });
     }
-    
+
     res.status(500).json({
       success: false,
       message: 'Server error while updating product'
@@ -1091,10 +1176,10 @@ export const updateProduct = async (req, res) => {
  */
 export const deleteProduct = async (req, res) => {
   const transaction = await sequelize.transaction();
-  
+
   try {
     const product = await Product.findByPk(req.params.id, { transaction });
-    
+
     if (!product) {
       await transaction.rollback();
       return res.status(404).json({
@@ -1102,7 +1187,7 @@ export const deleteProduct = async (req, res) => {
         message: 'Product not found'
       });
     }
-    
+
     // Check ownership (admin or seller)
     if (req.user.role !== 'admin' && product.sellerId !== req.user.id) {
       await transaction.rollback();
@@ -1111,11 +1196,11 @@ export const deleteProduct = async (req, res) => {
         message: 'Not authorized to delete this product'
       });
     }
-    
+
     // Delete images from Cloudinary
     if (product.colorsAndImages && typeof product.colorsAndImages === 'object') {
       const publicIds = [];
-      
+
       Object.values(product.colorsAndImages).forEach(images => {
         if (Array.isArray(images)) {
           images.forEach(img => {
@@ -1125,22 +1210,22 @@ export const deleteProduct = async (req, res) => {
           });
         }
       });
-      
+
       if (publicIds.length > 0) {
         console.log('Deleting images from Cloudinary:', publicIds);
         await deleteImages(publicIds);
       }
     }
-    
+
     // Soft delete or hard delete
     if (req.query.hardDelete === 'true') {
       await product.destroy({ transaction });
     } else {
       await product.update({ isActive: false }, { transaction });
     }
-    
+
     await transaction.commit();
-    
+
     res.status(200).json({
       success: true,
       message: `Product ${req.query.hardDelete === 'true' ? 'deleted' : 'deactivated'} successfully`
@@ -1183,7 +1268,7 @@ export const getFeaturedProducts = async (req, res) => {
         }
       ]
     });
-    
+
     res.status(200).json({
       success: true,
       data: products
@@ -1205,14 +1290,14 @@ export const getFeaturedProducts = async (req, res) => {
 export const getRelatedProducts = async (req, res) => {
   try {
     const product = await Product.findByPk(req.params.id);
-    
+
     if (!product) {
       return res.status(404).json({
         success: false,
         message: 'Product not found'
       });
     }
-    
+
     const relatedProducts = await Product.findAll({
       where: {
         categoryId: product.categoryId,
@@ -1236,7 +1321,7 @@ export const getRelatedProducts = async (req, res) => {
         }
       ]
     });
-    
+
     res.status(200).json({
       success: true,
       data: relatedProducts
@@ -1258,14 +1343,14 @@ export const getRelatedProducts = async (req, res) => {
 export const updateProductStock = async (req, res) => {
   try {
     const product = await Product.findByPk(req.params.id);
-    
+
     if (!product) {
       return res.status(404).json({
         success: false,
         message: 'Product not found'
       });
     }
-    
+
     // Check ownership (admin or seller)
     if (req.user.role !== 'admin' && product.sellerId !== req.user.id) {
       return res.status(403).json({
@@ -1273,13 +1358,13 @@ export const updateProductStock = async (req, res) => {
         message: 'Not authorized to update this product'
       });
     }
-    
+
     const { stock, colorName, operation = 'set' } = req.body;
-    
+
     // Handle JSON stock structure (per color)
     if (stock !== undefined) {
       let parsedStock = {};
-      
+
       // If stock is a JSON string or object, parse it
       if (typeof stock === 'string') {
         try {
@@ -1319,7 +1404,7 @@ export const updateProductStock = async (req, res) => {
             message: 'Valid stock value is required'
           });
         }
-        
+
         if (colorName) {
           parsedStock = { ...(product.stock || {}), [colorName]: stockValue };
         } else {
@@ -1333,7 +1418,7 @@ export const updateProductStock = async (req, res) => {
           }
         }
       }
-      
+
       // Apply operation if specified
       if (operation !== 'set' && colorName) {
         const currentStock = (product.stock && product.stock[colorName]) || 0;
@@ -1346,9 +1431,9 @@ export const updateProductStock = async (req, res) => {
             break;
         }
       }
-      
+
       await product.update({ stock: parsedStock });
-      
+
       res.status(200).json({
         success: true,
         message: 'Stock updated successfully',

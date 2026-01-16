@@ -16,8 +16,7 @@ import {
   couponRoutes,
   categoryRoutes,
   brandRoutes,
-  emiRoutes,
-  adminEmiRoutes,modelRoutes
+  modelRoutes
 } from './routes/index.js';
 import { apiLimiter } from './middleware/rateLimiter.js';
 import { checkBirthdaysAndSendWishes } from './utils/birthdayWish.js';
@@ -32,10 +31,11 @@ const PORT = process.env.PORT || 5000;
 
 // CORS configuration
 const corsOptions = {
-  origin: process.env.FRONTEND_URL,
+  origin: "http://localhost:8080",
   credentials: true,
   optionsSuccessStatus: 200
 };
+
 
 // Security middleware
 app.use(helmet({
@@ -69,8 +69,7 @@ app.use('/api/reviews', reviewRoutes);
 app.use('/api/coupons', couponRoutes);
 app.use('/api/categories', categoryRoutes);
 app.use('/api/brands', brandRoutes);
-app.use('/api/emi', emiRoutes);
-app.use('/api/admin/emi', adminEmiRoutes);
+// REMOVED EMI ROUTES
 app.use('/api/models', modelRoutes)
 app.use('/api/birthdays', birthdayRoutes);
 
@@ -106,10 +105,10 @@ app.use((req, res) => {
 // Global error handler
 app.use((err, req, res, next) => {
   console.error('Global error handler:', err);
-  
+
   const statusCode = err.statusCode || 500;
   const message = err.message || 'Internal server error';
-  
+
   res.status(statusCode).json({
     success: false,
     message,
@@ -123,21 +122,21 @@ const startServer = async () => {
     // Test database connection
     await sequelize.authenticate();
     console.log('✅ Database connection established successfully.');
-    
+
     // Sync database (use force: true only in development)
-    const syncOptions = process.env.NODE_ENV === 'development' 
-      ? { force: false} // Be careful with alter in production
+    const syncOptions = process.env.NODE_ENV === 'development'
+      ? { force: false } // Be careful with alter in production
       : { alter: false };
-    
+
     await sequelize.sync(syncOptions);
     console.log('✅ Database synchronized successfully.');
-    
+
     // Create default admin user if not exists
     await createDefaultAdmin();
-    
+
     // Start birthday wish scheduler
     startBirthdayScheduler();
-    
+
     // Start server
     app.listen(PORT, () => {
       console.log(`🚀 Server is running on port ${PORT}`);
@@ -154,14 +153,14 @@ const startServer = async () => {
 const createDefaultAdmin = async () => {
   try {
     const User = (await import('./models/User.js')).default;
-    
+
     const adminExists = await User.findOne({
       where: {
         phone: process.env.DEFAULT_ADMIN_PHONE,
         role: 'admin'
       }
     });
-    
+
     if (!adminExists) {
       const admin = await User.create({
         name: 'Admin User',
@@ -170,7 +169,7 @@ const createDefaultAdmin = async () => {
         isVerified: true,
         slug: 'admin-user-' + Date.now().toString().slice(-6)
       });
-      
+
       console.log('✅ Default admin user created:', admin.phone);
     } else {
       console.log('✅ Admin user already exists');
@@ -187,7 +186,7 @@ const startBirthdayScheduler = () => {
     try {
       console.log('🎂 Checking for birthdays...');
       const result = await checkBirthdaysAndSendWishes();
-      
+
       if (result.count > 0) {
         console.log(`🎁 Sent birthday wishes to ${result.count} users`);
       }
@@ -195,10 +194,10 @@ const startBirthdayScheduler = () => {
       console.error('❌ Error in birthday wish scheduler:', error);
     }
   };
-  
+
   // Run immediately on startup
   checkAndSendBirthdayWishes();
-  
+
   // Schedule to run daily at 9:00 AM
   const now = new Date();
   const nineAM = new Date(
@@ -207,19 +206,19 @@ const startBirthdayScheduler = () => {
     now.getDate(),
     9, 0, 0, 0
   );
-  
+
   if (now > nineAM) {
     nineAM.setDate(nineAM.getDate() + 1);
   }
-  
+
   const timeUntilNineAM = nineAM.getTime() - now.getTime();
-  
+
   setTimeout(() => {
     checkAndSendBirthdayWishes();
     // Run every 24 hours
     setInterval(checkAndSendBirthdayWishes, 24 * 60 * 60 * 1000);
   }, timeUntilNineAM);
-  
+
   console.log(`🎂 Birthday scheduler started. Next check at: ${nineAM.toLocaleString()}`);
 };
 

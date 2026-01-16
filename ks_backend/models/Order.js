@@ -34,17 +34,10 @@ const Order = sequelize.define('Order', {
     allowNull: true
   },
   paymentMethod: {
-    type: DataTypes.ENUM('cod', 'card', 'upi', 'emi'),
+    type: DataTypes.ENUM('cod', 'card', 'upi'),
     defaultValue: 'cod'
   },
-  emiTenure: {
-    type: DataTypes.INTEGER,
-    allowNull: true,
-    validate: {
-      isIn: [[3, 6, 9, 12]]
-    },
-    comment: 'EMI tenure in months (if payment method is EMI)'
-  },
+  // REMOVED emiTenure
   paymentStatus: {
     type: DataTypes.ENUM('pending', 'paid', 'failed', 'refunded'),
     defaultValue: 'pending'
@@ -91,7 +84,7 @@ const Order = sequelize.define('Order', {
     }
   }
 }, {
-    tableName: 'orders',
+  tableName: 'orders',
   timestamps: true, // This enables createdAt and updatedAt
   createdAt: 'created_at', // Maps to database column
   updatedAt: 'updated_at',
@@ -103,12 +96,12 @@ const Order = sequelize.define('Order', {
         const random = Math.floor(Math.random() * 1000);
         order.orderNumber = `ORD${timestamp}${random}`;
       }
-      
+
       // Generate tracking ID if not provided and order is shipped
       if (!order.trackingId && order.orderStatus === 'shipped') {
         order.trackingId = `TRK${Date.now()}${Math.floor(Math.random() * 10000)}`;
       }
-      
+
       // Calculate final amount
       if (order.totalPrice !== undefined) {
         const shipping = order.shippingCost || 0;

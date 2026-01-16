@@ -23,8 +23,8 @@ Authorization: Bearer <token>
 7. [Coupons](#coupon-endpoints)
 8. [Categories](#category-endpoints)
 9. [Brands](#brand-endpoints)
-10. [EMI](#emi-endpoints)
-11. [Admin](#admin-endpoints)
+
+10. [Admin](#admin-endpoints)
 
 ---
 
@@ -716,88 +716,7 @@ Delete brand (admin only).
 
 ---
 
-## EMI Endpoints
 
-### Calculate EMI Options
-**POST** `/api/emi/calculate`
-
-Calculate EMI options for an amount.
-
-**Headers:** `Authorization: Bearer <token>`
-
-**Request Body:**
-```json
-{
-  "amount": 10000,
-  "emiConfig": {
-    "3": 0,
-    "6": 2,
-    "9": 3,
-    "12": 5
-  }
-}
-```
-
-**Response:**
-```json
-{
-  "success": true,
-  "data": {
-    "amount": 10000,
-    "options": [
-      {
-        "tenure": 3,
-        "monthlyInstallment": 3333.33,
-        "totalAmount": 10000,
-        "totalInterest": 0,
-        "interestRate": 0
-      },
-      {
-        "tenure": 6,
-        "monthlyInstallment": 1683.50,
-        "totalAmount": 10101,
-        "totalInterest": 101,
-        "interestRate": 2
-      }
-    ]
-  }
-}
-```
-
-### Get My EMI Payments
-**GET** `/api/emi/my-payments`
-
-Get user's EMI payments.
-
-**Headers:** `Authorization: Bearer <token>`
-
-**Query Parameters:**
-- `page` (default: 1)
-- `limit` (default: 10)
-- `status` - Filter by status (active, completed, overdue)
-
-### Get EMI Payment Details
-**GET** `/api/emi/:id`
-
-Get EMI payment details.
-
-**Headers:** `Authorization: Bearer <token>`
-
-### Get Upcoming Installments
-**GET** `/api/emi/upcoming`
-
-Get upcoming installments.
-
-**Headers:** `Authorization: Bearer <token>`
-
-### Get Overdue Installments
-**GET** `/api/emi/overdue`
-
-Get overdue installments.
-
-**Headers:** `Authorization: Bearer <token>`
-
-### Admin: Get All EMI Payments
 **GET** `/api/admin/emi/payments`
 
 Get all EMI payments (admin only).

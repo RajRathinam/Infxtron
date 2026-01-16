@@ -51,9 +51,18 @@ const User = sequelize.define('User', {
     allowNull: true,
     defaultValue: null,
     get() {
-      const rawValue = this.getDataValue('address');
+      let rawValue = this.getDataValue('address');
       if (!rawValue) return null;
-      
+
+      // Handle stringified JSON
+      if (typeof rawValue === 'string') {
+        try {
+          rawValue = JSON.parse(rawValue);
+        } catch (e) {
+          // ignore
+        }
+      }
+
       // Ensure address is properly structured
       if (typeof rawValue === 'object') {
         return {
@@ -61,7 +70,7 @@ const User = sequelize.define('User', {
           city: rawValue.city || rawValue.district || '',
           state: rawValue.state || '',
           pincode: rawValue.pincode || '',
-          fullAddress: rawValue.fullAddress || 
+          fullAddress: rawValue.fullAddress ||
             `${rawValue.street || ''}${rawValue.city ? `, ${rawValue.city}` : ''}${rawValue.pincode ? `, ${rawValue.pincode}` : ''}`
         };
       }
@@ -75,7 +84,7 @@ const User = sequelize.define('User', {
           city: value.city || value.district || '',
           state: value.state || '',
           pincode: value.pincode || '',
-          fullAddress: value.fullAddress || 
+          fullAddress: value.fullAddress ||
             `${value.street || ''}${value.city ? `, ${value.city}` : ''}${value.pincode ? `, ${value.pincode}` : ''}`
         });
       } else {
@@ -88,9 +97,19 @@ const User = sequelize.define('User', {
     allowNull: true,
     defaultValue: [],
     get() {
-      const rawValue = this.getDataValue('additionalAddresses');
+      let rawValue = this.getDataValue('additionalAddresses');
+
+      // Handle stringified JSON
+      if (typeof rawValue === 'string') {
+        try {
+          rawValue = JSON.parse(rawValue);
+        } catch (e) {
+          rawValue = [];
+        }
+      }
+
       if (!rawValue || !Array.isArray(rawValue)) return [];
-      
+
       return rawValue.map(addr => ({
         id: addr.id || String(Math.random()),
         name: addr.name || '',
@@ -151,14 +170,14 @@ const User = sequelize.define('User', {
         }).then(users => users.map(user => user.slug));
         user.slug = generateSlug(user.name, allSlugs);
       }
-      
+
       // Generate customer code for customers
       if (user.role === 'customer' && !user.customerCode) {
         const timestamp = Date.now().toString().slice(-6);
         const random = Math.floor(Math.random() * 1000).toString().padStart(3, '0');
         user.customerCode = `CUST${timestamp}${random}`;
       }
-      
+
       // Ensure additionalAddresses is an array
       if (user.additionalAddresses === null || user.additionalAddresses === undefined) {
         user.additionalAddresses = [];
@@ -169,12 +188,12 @@ const User = sequelize.define('User', {
       if (user.additionalAddresses === null || user.additionalAddresses === undefined) {
         user.additionalAddresses = [];
       }
-      
+
       // Ensure each address has required fields
       if (Array.isArray(user.additionalAddresses)) {
         user.additionalAddresses = user.additionalAddresses.map(addr => {
           if (!addr.id) {
-            addr.id = crypto.randomUUID ? crypto.randomUUID() : 
+            addr.id = crypto.randomUUID ? crypto.randomUUID() :
               Date.now().toString(36) + Math.random().toString(36).substr(2);
           }
           if (!addr.createdAt) addr.createdAt = new Date().toISOString();
@@ -187,17 +206,17 @@ const User = sequelize.define('User', {
       // Ensure all users have proper address structure
       const processUser = (user) => {
         if (!user) return;
-        
+
         if (user.additionalAddresses === null || user.additionalAddresses === undefined) {
           user.additionalAddresses = [];
         }
-        
+
         // Convert to plain object if needed
         if (user.dataValues) {
           user.dataValues.additionalAddresses = user.additionalAddresses;
         }
       };
-      
+
       if (Array.isArray(users)) {
         users.forEach(processUser);
       } else {

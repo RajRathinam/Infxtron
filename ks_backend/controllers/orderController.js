@@ -1,6 +1,5 @@
-import { Order, Cart, Product, User, Coupon, UserCoupon, EmiPayment, EmiInstallment, sequelize, Sequelize } from '../models/index.js';
+import { Order, Cart, Product, User, Coupon, UserCoupon, sequelize, Sequelize } from '../models/index.js';
 import { generateOrderNumber } from '../utils/helpers.js';
-import { calculateEMI, generateInstallmentSchedule } from '../utils/emiCalculator.js';
 
 /**
  * @desc    Create new order from cart
@@ -9,18 +8,16 @@ import { calculateEMI, generateInstallmentSchedule } from '../utils/emiCalculato
  */
 export const createOrder = async (req, res) => {
   const transaction = await sequelize.transaction();
-  
+
   try {
     const {
       shippingAddress,
       billingAddress,
       paymentMethod,
       notes,
-      couponCode,
-      emiTenure,
-      emiInterestRate
+      couponCode
     } = req.body;
-    
+
     // Validate shipping address
     if (!shippingAddress || typeof shippingAddress !== 'object') {
       await transaction.rollback();
@@ -29,13 +26,13 @@ export const createOrder = async (req, res) => {
         message: 'Shipping address is required'
       });
     }
-    
+
     // Get user's cart
     const cart = await Cart.findOne({
       where: { userId: req.user.id },
       transaction
     });
-    
+
     if (!cart || !cart.items || cart.items.length === 0) {
       await transaction.rollback();
       return res.status(400).json({
@@ -43,16 +40,54 @@ export const createOrder = async (req, res) => {
         message: 'Cart is empty'
       });
     }
-    
+
     // Verify all items are available and prepare order items
     const orderItems = [];
     let totalPrice = 0;
     let shippingCost = 0;
     let taxAmount = 0;
-    
-    for (const item of cart.items) {
+
+    // Parse cart items if necessary
+    let parsedItems = [];
+    try {
+      if (typeof cart.items === 'string') {
+        parsedItems = JSON.parse(cart.items);
+      } else if (Array.isArray(cart.items)) {
+        parsedItems = cart.items;
+      } else {
+        parsedItems = [];
+      }
+    } catch (e) {
+      console.error("Error parsing cart items:", e);
+      parsedItems = [];
+    }
+
+    // Filter out invalid items (self-healing for corrupted carts)
+    const validItems = parsedItems.filter(item =>
+      item.productId &&
+      item.productId !== 'undefined' &&
+      item.productId !== 'null' &&
+      !isNaN(parseInt(item.productId))
+    );
+
+    if (validItems.length !== parsedItems.length) {
+      console.log(`🧹 cleaned ${parsedItems.length - validItems.length} corrupted items from cart`);
+      cart.items = validItems;
+      // Update cart in DB to make it permanent
+      await Cart.update({ items: validItems }, { where: { id: cart.id }, transaction });
+
+      if (validItems.length === 0) {
+        await transaction.commit(); // Commit the cleanup
+        return res.status(400).json({
+          success: false,
+          message: 'Cart contained invalid items and has been cleared. Please add products again.'
+        });
+      }
+    }
+
+    for (const item of validItems) {
       const product = await Product.findByPk(item.productId, { transaction });
-      
+
       if (!product) {
         await transaction.rollback();
         return res.status(404).json({
@@ -60,10 +95,10 @@ export const createOrder = async (req, res) => {
           message: `Product ${item.productId} not found`
         });
       }
-      
+
       // Check stock availability (simple numeric stock check)
       const availableStock = product.stock;
-      
+
       if (!product.availability || availableStock < item.quantity) {
         await transaction.rollback();
         return res.status(400).json({
@@ -71,10 +106,10 @@ export const createOrder = async (req, res) => {
           message: `Product "${product.name}"${item.colorName ? ` (${item.colorName})` : ''} is out of stock or insufficient quantity. Available: ${availableStock}`
         });
       }
-      
+
       const price = product.discountPrice || product.price;
       const itemTotal = price * item.quantity;
-      
+
       // Get image for the specific color if available
       let itemImage = null;
       if (item.colorName && product.colorsAndImages && product.colorsAndImages[item.colorName]) {
@@ -91,7 +126,7 @@ export const createOrder = async (req, res) => {
           itemImage = mainImage ? mainImage.url : product.colorsAndImages[firstColor][0].url;
         }
       }
-      
+
       orderItems.push({
         productId: product.id,
         name: product.name,
@@ -103,15 +138,15 @@ export const createOrder = async (req, res) => {
         image: itemImage,
         variant: product.variant
       });
-      
+
       totalPrice += itemTotal;
       taxAmount += itemTotal * (product.tax || 0) / 100;
     }
-    
+
     // Apply coupon if provided
     let discountAmount = 0;
     let couponId = null;
-    
+
     if (couponCode) {
       const coupon = await Coupon.findOne({
         where: {
@@ -122,7 +157,7 @@ export const createOrder = async (req, res) => {
         },
         transaction
       });
-      
+
       if (coupon) {
         // Check usage limit
         if (coupon.usageLimit && coupon.usedCount >= coupon.usageLimit) {
@@ -132,7 +167,7 @@ export const createOrder = async (req, res) => {
             message: 'Coupon usage limit reached'
           });
         }
-        
+
         // Check minimum order amount
         if (coupon.minOrderAmount && totalPrice < coupon.minOrderAmount) {
           await transaction.rollback();
@@ -141,7 +176,7 @@ export const createOrder = async (req, res) => {
             message: `Minimum order amount of ${coupon.minOrderAmount} required for this coupon`
           });
         }
-        
+
         // Check if user has already used this coupon
         if (coupon.isSingleUse) {
           const userCoupon = await UserCoupon.findOne({
@@ -152,7 +187,7 @@ export const createOrder = async (req, res) => {
             },
             transaction
           });
-          
+
           if (userCoupon) {
             await transaction.rollback();
             return res.status(400).json({
@@ -161,7 +196,7 @@ export const createOrder = async (req, res) => {
             });
           }
         }
-        
+
         // Calculate discount
         let discount = 0;
         if (coupon.discountType === 'percentage') {
@@ -172,10 +207,10 @@ export const createOrder = async (req, res) => {
         } else {
           discount = coupon.discountValue;
         }
-        
+
         discountAmount = discount;
         couponId = coupon.id;
-        
+
         // Mark coupon as used
         await UserCoupon.create({
           userId: req.user.id,
@@ -184,29 +219,18 @@ export const createOrder = async (req, res) => {
           usedAt: new Date(),
           orderId: null // Will be updated after order creation
         }, { transaction });
-        
+
         // Increment coupon usage count
         await coupon.increment('usedCount', { transaction });
       }
     }
-    
+
     // Calculate final amount
     const finalAmount = totalPrice + shippingCost + taxAmount - discountAmount;
-    
+
     // Generate order number
     const orderNumber = generateOrderNumber();
-    
-    // Validate EMI if payment method is EMI
-    if (paymentMethod === 'emi') {
-      if (!emiTenure || ![3, 6, 9, 12].includes(parseInt(emiTenure))) {
-        await transaction.rollback();
-        return res.status(400).json({
-          success: false,
-          message: 'Valid EMI tenure (3, 6, 9, or 12 months) is required'
-        });
-      }
-    }
-    
+
     // Create order
     const order = await Order.create({
       orderNumber,
@@ -215,7 +239,7 @@ export const createOrder = async (req, res) => {
       shippingAddress,
       billingAddress: billingAddress || shippingAddress,
       paymentMethod: paymentMethod || 'cod',
-      paymentStatus: paymentMethod === 'cod' ? 'pending' : (paymentMethod === 'emi' ? 'pending' : 'pending'),
+      paymentStatus: 'pending',
       orderStatus: 'pending',
       totalPrice,
       shippingCost,
@@ -223,25 +247,24 @@ export const createOrder = async (req, res) => {
       discountAmount,
       finalAmount,
       notes,
-      couponId,
-      emiTenure: paymentMethod === 'emi' ? parseInt(emiTenure) : null
+      couponId
     }, { transaction });
-    
+
     // Deduct stock for all products in order (SIMPLE NUMERIC STOCK)
     for (const item of cart.items) {
       const product = await Product.findByPk(item.productId, { transaction });
-      
+
       if (product) {
         // Simple numeric stock decrement
         const newStock = Math.max(0, product.stock - item.quantity);
-        
+
         await product.update({
           stock: newStock,
           availability: newStock > 0
         }, { transaction });
       }
     }
-    
+
     // Update coupon with order ID if used
     if (couponId) {
       await UserCoupon.update(
@@ -256,82 +279,20 @@ export const createOrder = async (req, res) => {
         }
       );
     }
-    
+
     // Clear cart
     await cart.update({
       items: [],
       totalAmount: 0
     }, { transaction });
-    
-    // Create EMI payment if payment method is EMI
-    let emiPayment = null;
-    if (paymentMethod === 'emi') {
-      const interestRate = emiInterestRate || 0; // Default 0% interest, can be configured
-      const emiDetails = calculateEMI(finalAmount, interestRate, parseInt(emiTenure));
-      const startDate = new Date(); // EMI starts from order date
-      
-      emiPayment = await EmiPayment.create({
-        orderId: order.id,
-        userId: req.user.id,
-        principalAmount: finalAmount,
-        interestRate: interestRate,
-        tenure: parseInt(emiTenure),
-        monthlyInstallment: emiDetails.monthlyInstallment,
-        totalAmount: emiDetails.totalAmount,
-        totalInterest: emiDetails.totalInterest,
-        startDate: startDate,
-        status: 'active',
-        nextDueDate: new Date(startDate.getTime() + 30 * 24 * 60 * 60 * 1000), // First installment due in 30 days
-        paidInstallments: 0,
-        remainingInstallments: parseInt(emiTenure)
-      }, { transaction });
-      
-      // Generate installment schedule
-      const installments = generateInstallmentSchedule(
-        finalAmount,
-        emiDetails.monthlyInstallment,
-        interestRate,
-        parseInt(emiTenure),
-        startDate
-      );
-      
-      // Create installments
-      await EmiInstallment.bulkCreate(
-        installments.map(inst => ({
-          emiPaymentId: emiPayment.id,
-          installmentNumber: inst.installmentNumber,
-          dueDate: inst.dueDate,
-          amount: inst.amount,
-          principalAmount: inst.principalAmount,
-          interestAmount: inst.interestAmount,
-          status: inst.status
-        })),
-        { transaction }
-      );
-    }
-    
+
     await transaction.commit();
-    
-    // Include EMI details in response if EMI payment was created
+
     const orderResponse = order.toJSON();
-    if (emiPayment) {
-      const emiWithInstallments = await EmiPayment.findByPk(emiPayment.id, {
-        include: [
-          {
-            model: EmiInstallment,
-            as: 'installments',
-            order: [['installmentNumber', 'ASC']]
-          }
-        ]
-      });
-      orderResponse.emiPayment = emiWithInstallments;
-    }
-    
+
     res.status(201).json({
       success: true,
-      message: paymentMethod === 'emi' 
-        ? 'Order created successfully with EMI payment plan' 
-        : 'Order created successfully',
+      message: 'Order created successfully',
       data: orderResponse
     });
   } catch (error) {
@@ -339,7 +300,9 @@ export const createOrder = async (req, res) => {
     console.error('Create order error:', error);
     res.status(500).json({
       success: false,
-      message: 'Server error while creating order'
+      message: 'Server error while creating order',
+      error: error.message,
+      stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
     });
   }
 };
@@ -353,10 +316,10 @@ export const getOrders = async (req, res) => {
   try {
     const { page = 1, limit = 10, status } = req.query;
     const offset = (page - 1) * limit;
-    
+
     const where = { userId: req.user.id };
     if (status) where.orderStatus = status;
-    
+
     const { count, rows: orders } = await Order.findAndCountAll({
       where,
       limit: parseInt(limit),
@@ -370,11 +333,25 @@ export const getOrders = async (req, res) => {
         }
       ]
     });
-    
+
+    // Parse orderItems if they are strings (robustness fix)
+    const validOrders = orders.map(order => {
+      const plainOrder = order.toJSON();
+      try {
+        if (typeof plainOrder.orderItems === 'string') {
+          plainOrder.orderItems = JSON.parse(plainOrder.orderItems);
+        }
+      } catch (e) {
+        console.error(`Error parsing orderItems for order ${order.id}:`, e);
+        plainOrder.orderItems = [];
+      }
+      return plainOrder;
+    });
+
     res.status(200).json({
       success: true,
       data: {
-        orders,
+        orders: validOrders,
         pagination: {
           currentPage: parseInt(page),
           totalPages: Math.ceil(count / limit),
@@ -416,33 +393,33 @@ export const getOrder = async (req, res) => {
         }
       ]
     });
-    
+
     if (!order) {
       return res.status(404).json({
         success: false,
         message: 'Order not found'
       });
     }
-    
+
     // Enrich order items with product details
     const enrichedItems = await Promise.all(
       order.orderItems.map(async (item) => {
         const product = await Product.findByPk(item.productId, {
           attributes: ['id', 'name', 'slug', 'images']
         });
-        
+
         return {
           ...item,
           product: product || null
         };
       })
     );
-    
+
     const enrichedOrder = {
       ...order.toJSON(),
       orderItems: enrichedItems
     };
-    
+
     res.status(200).json({
       success: true,
       data: enrichedOrder
@@ -463,7 +440,7 @@ export const getOrder = async (req, res) => {
  */
 export const cancelOrder = async (req, res) => {
   const transaction = await sequelize.transaction();
-  
+
   try {
     const order = await Order.findOne({
       where: {
@@ -472,7 +449,7 @@ export const cancelOrder = async (req, res) => {
       },
       transaction
     });
-    
+
     if (!order) {
       await transaction.rollback();
       return res.status(404).json({
@@ -480,7 +457,7 @@ export const cancelOrder = async (req, res) => {
         message: 'Order not found'
       });
     }
-    
+
     // Check if order can be cancelled
     if (!['pending', 'processing'].includes(order.orderStatus)) {
       await transaction.rollback();
@@ -489,28 +466,28 @@ export const cancelOrder = async (req, res) => {
         message: `Order cannot be cancelled in "${order.orderStatus}" status`
       });
     }
-    
+
     // Update order status
     await order.update({
       orderStatus: 'cancelled',
       paymentStatus: order.paymentStatus === 'paid' ? 'refunded' : 'failed'
     }, { transaction });
-    
+
     // Restore product stock (SIMPLE NUMERIC STOCK)
     for (const item of order.orderItems) {
       const product = await Product.findByPk(item.productId, { transaction });
-      
+
       if (product) {
         // Simple numeric stock increment
         const newStock = (product.stock || 0) + item.quantity;
-        
+
         await product.update({
           stock: newStock,
           availability: newStock > 0
         }, { transaction });
       }
     }
-    
+
     // Refund coupon if used
     if (order.couponId) {
       await UserCoupon.update(
@@ -524,15 +501,15 @@ export const cancelOrder = async (req, res) => {
           transaction
         }
       );
-      
+
       await Coupon.decrement('usedCount', {
         where: { id: order.couponId },
         transaction
       });
     }
-    
+
     await transaction.commit();
-    
+
     res.status(200).json({
       success: true,
       message: 'Order cancelled successfully',
@@ -556,7 +533,7 @@ export const cancelOrder = async (req, res) => {
 export const trackOrder = async (req, res) => {
   try {
     const { trackingId } = req.params;
-    
+
     const order = await Order.findOne({
       where: { trackingId },
       include: [
@@ -567,14 +544,14 @@ export const trackOrder = async (req, res) => {
         }
       ]
     });
-    
+
     if (!order) {
       return res.status(404).json({
         success: false,
         message: 'Order not found'
       });
     }
-    
+
     // Return limited info for public tracking
     const trackingInfo = {
       orderNumber: order.orderNumber,
@@ -583,7 +560,7 @@ export const trackOrder = async (req, res) => {
       estimatedDelivery: order.estimatedDelivery,
       lastUpdated: order.updatedAt
     };
-    
+
     res.status(200).json({
       success: true,
       data: trackingInfo
@@ -605,7 +582,7 @@ export const trackOrder = async (req, res) => {
 export const getOrderByNumber = async (req, res) => {
   try {
     const { orderNumber } = req.params;
-    
+
     const order = await Order.findOne({
       where: {
         orderNumber,
@@ -624,14 +601,14 @@ export const getOrderByNumber = async (req, res) => {
         }
       ]
     });
-    
+
     if (!order) {
       return res.status(404).json({
         success: false,
         message: 'Order not found'
       });
     }
-    
+
     res.status(200).json({
       success: true,
       data: order
