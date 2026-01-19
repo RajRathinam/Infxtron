@@ -1,0 +1,40 @@
+### Test Telegram configuration
+POST https://ags-backend-j5bb.onrender.com/api/payments/test-telegram
+
+### Update payment status to SUCCESS (will trigger Telegram)
+POST https://ags-backend-j5bb.onrender.com/api/payments/update-status
+Content-Type: application/json
+
+{
+  "transactionId": "TXN_1765294244018_803x9k6c8",
+  "status": "SUCCESS"
+}
+
+### Verify payment (will also trigger Telegram if successful)
+POST https://ags-backend-j5bb.onrender.com/api/payments/verify
+Content-Type: application/json
+
+{
+  "orderId": "46"
+}
+
+
+### Test Telegram configuration
+POST http://localhost:10000/api/payments/test-telegram
+
+### Update payment status to SUCCESS (will trigger Telegram)
+POST http://localhost:10000/api/payments/update-status
+Content-Type: application/json
+
+{
+  "transactionId": "TXN_1765294244018_803x9k6c8",
+  "status": "SUCCESS"
+}
+
+### Verify payment (will also trigger Telegram if successful)
+POST http://localhost:10000/api/payments/verify
+Content-Type: application/json
+
+{
+  "orderId": "2"
+}

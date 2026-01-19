@@ -22,7 +22,6 @@ export const placeOrder = async (req, res) => {
       message: "All required fields must be filled: name, phone, products, totalPrice, address, deliveryPoint, deliveryDate" 
     });
   }
-
   if (!/^\d{10}$/.test(phone)) {
     return res.status(400).json({ 
       message: "Phone number must be exactly 10 digits" 

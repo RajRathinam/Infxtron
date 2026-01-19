@@ -46,7 +46,7 @@ app.use(
   cors({
     origin: function (origin, callback) {
       const allowedOrigins = [
-        process.env.FRONTEND_URL,process.env.FRONTEND_URL_1
+        process.env.FRONTEND_URL
       ].filter(Boolean);
       
       if (!origin) return callback(null, true);
@@ -110,14 +110,7 @@ app.get("/", (req, res) => {
     version: "1.0.0"
   });
 });
-// --- health check (keeps server awake) ---
-app.get("/health", (req, res) => {
-  res.status(200).json({
-    status: "ok",
-    uptime: process.uptime(),
-    time: new Date().toISOString(),
-  });
-});
+
 // API Status
 app.get("/api/status", (req, res) => {
   res.json({
