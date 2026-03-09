@@ -30,6 +30,13 @@ const Product = sequelize.define("Product", {
   familyWeeklySubscription: { type: DataTypes.INTEGER, allowNull: true },
   familyMonthlySubscription: { type: DataTypes.INTEGER, allowNull: true },
   
+  // NEW FIELD: Amirtham Special Products
+  isAmirtham: { 
+    type: DataTypes.BOOLEAN, 
+    allowNull: false,
+    defaultValue: false
+  },
+  
   availableDay: { 
     type: DataTypes.TEXT,
     allowNull: true,
@@ -61,6 +68,9 @@ const Product = sequelize.define("Product", {
   indexes: [
     {
       fields: ['category']
+    },
+    {
+      fields: ['isAmirtham'] // Add index for isAmirtham for better query performance
     }
   ]
 });
